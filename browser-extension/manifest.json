@@ -1,15 +1,14 @@
 {
   "manifest_version": 3,
   "name": "AI Input Enhancer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "AI-powered text enhancement tools for any input field using Chrome's Built-in AI APIs",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+contextMenus
   ],
-  "host_permissions": [
-    "<all_urls>"
-  ],
+  "host_permissions": ["<all_urls>"],
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -22,15 +21,12 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "<all_urls>"
-      ],
+      "matches": ["<all_urls>"],
       "js": [
-        "content-scripts/main.js"
+        "content-scripts/main.js",
+        "content-scripts/context.js"
       ],
-      "css": [
-        "styles/toolbar.css"
-      ],
+      "css": ["styles/toolbar.css"],
       "run_at": "document_idle"
     }
   ],
@@ -40,13 +36,8 @@
   },
   "web_accessible_resources": [
     {
-      "resources": [
-        "styles/*.css",
-        "ui/*.js"
-      ],
-      "matches": [
-        "<all_urls>"
-      ]
+      "resources": ["styles/*.css", "ui/*.js"],
+      "matches": ["<all_urls>"]
     }
   ]
 }

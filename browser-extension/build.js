@@ -13,6 +13,7 @@ const jsFiles = [
   "background.js",
   "popup.js",
   "content-scripts/main.js",
+  "content-scripts/context.js",
   "core/ai-service-manager.js",
   "core/input-field-detector.js",
   "core/toolbar-manager.js",
