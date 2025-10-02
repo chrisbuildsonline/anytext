@@ -1,0 +1,28 @@
+{
+  "name": "ai-input-enhancer",
+  "version": "1.0.0",
+  "description": "AI-powered text enhancement tools for any input field using Chrome's Built-in AI APIs",
+  "main": "build.js",
+  "scripts": {
+    "build": "node build.js",
+    "build:production": "node build.js --production",
+    "dev": "node build.js",
+    "clean": "rm -rf dist",
+    "zip": "npm run build:production",
+    "test": "echo \"Tests will be added in later tasks\" && exit 0"
+  },
+  "keywords": [
+    "chrome-extension",
+    "ai",
+    "text-enhancement",
+    "translation",
+    "proofreading",
+    "content-generation"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "fs-extra": "^11.3.1",
+    "terser": "^5.44.0"
+  }
+}

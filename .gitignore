@@ -1,0 +1,45 @@
+# History files
+.history/
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Dependencies
+node_modules/
+
+# Extension build files
+extension/*.zip
+extension/icons/*.png
+
+# API keys (backup - already in code)
+*.env
+.env*
+!.env.example
+
+.next
+
+frontend
+
+
+*.zip
+
+.tests
+
+dist
+
+.kiro
+
+.old
+
+.inspiration
