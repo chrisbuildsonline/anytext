@@ -9,7 +9,9 @@
     "dev": "node build.js",
     "clean": "rm -rf dist",
     "zip": "npm run build:production",
-    "test": "echo \"Tests will be added in later tasks\" && exit 0"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "keywords": [
     "chrome-extension",
@@ -22,7 +24,20 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@jest/globals": "^29.7.0",
     "fs-extra": "^11.3.1",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^30.2.0",
     "terser": "^5.44.0"
+  },
+  "jest": {
+    "testEnvironment": "jsdom",
+    "testMatch": [
+      "**/tests/**/*.test.js"
+    ],
+    "collectCoverageFrom": [
+      "core/**/*.js",
+      "!core/**/*.test.js"
+    ]
   }
 }
