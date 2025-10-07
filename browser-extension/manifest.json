@@ -18,7 +18,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content-scripts/main.js", "content-scripts/context.js"],
+      "js": ["content-scripts/main.js", "content-scripts/context.js", "content-scripts/input-button.js"],
       "css": ["styles/toolbar.css"],
       "run_at": "document_idle"
     }
