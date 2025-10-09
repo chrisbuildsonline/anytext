@@ -5,13 +5,21 @@ console.log("AnyText context script loaded");
 let currentActiveInput = null;
 let currentButton = null;
 let currentDropdown = null;
+let currentSubmenu = null;
+let userSettings = null;
 
 // Initialize the script
 init();
 
-function init() {
+async function init() {
+  // Load user settings
+  await loadUserSettings();
+
   // Set up input field detection
   setupInputDetection();
+  
+  // Set up right-click context menu
+  setupRightClickMenu();
 
   // Listen for messages from background/service worker
   chrome.runtime.onMessage.addListener((message) => {
@@ -22,10 +30,142 @@ function init() {
       case "AI_ERROR":
         handleAIError(message);
         break;
+      case "CONTEXT_MENU_ACTION":
+        handleContextMenuAction(message);
+        break;
       default:
         break;
     }
   });
+}
+
+async function loadUserSettings() {
+  try {
+    const result = await chrome.storage.sync.get(["aiInputEnhancerSettings"]);
+    userSettings = result.aiInputEnhancerSettings || {
+      features: {
+        translate: true,
+        proofread: true,
+        rewrite: true,
+        summarize: true,
+        generate: true,
+      },
+      languages: [
+        { code: "es", name: "Spanish", flag: "🇪🇸" },
+        { code: "fr", name: "French", flag: "🇫🇷" },
+        { code: "de", name: "German", flag: "🇩🇪" },
+        { code: "it", name: "Italian", flag: "🇮🇹" },
+        { code: "pt", name: "Portuguese", flag: "🇵🇹" },
+        { code: "ja", name: "Japanese", flag: "🇯🇵" },
+        { code: "ko", name: "Korean", flag: "🇰🇷" },
+        { code: "zh", name: "Chinese", flag: "🇨🇳" },
+      ],
+    };
+  } catch (error) {
+    console.error("Error loading settings:", error);
+    // Use default settings
+    userSettings = {
+      features: {
+        translate: true,
+        proofread: true,
+        rewrite: true,
+        summarize: true,
+        generate: true,
+      },
+      languages: [
+        { code: "es", name: "Spanish", flag: "🇪🇸" },
+        { code: "fr", name: "French", flag: "🇫🇷" },
+        { code: "de", name: "German", flag: "🇩🇪" },
+        { code: "it", name: "Italian", flag: "🇮🇹" },
+      ],
+    };
+  }
+}
+
+// === Right-Click Context Menu ===
+function setupRightClickMenu() {
+  // Store selected text for context menu actions
+  let lastSelectedText = '';
+  let selectionPosition = null;
+  
+  document.addEventListener('mouseup', (e) => {
+    const selection = window.getSelection();
+    const selectedText = selection.toString().trim();
+    
+    if (selectedText.length > 0) {
+      lastSelectedText = selectedText;
+      // Store the position where the selection ended for popover placement
+      selectionPosition = {
+        x: e.clientX,
+        y: e.clientY,
+        range: selection.getRangeAt(0).cloneRange()
+      };
+      
+      // Send selected text to background script for context menu setup
+      chrome.runtime.sendMessage({
+        type: 'SELECTION_CHANGED',
+        text: selectedText,
+        hasSelection: true
+      });
+    } else {
+      lastSelectedText = '';
+      selectionPosition = null;
+      chrome.runtime.sendMessage({
+        type: 'SELECTION_CHANGED',
+        hasSelection: false
+      });
+    }
+  });
+  
+  // Store reference for context menu actions
+  window.aiInputEnhancer = {
+    getSelectedText: () => lastSelectedText,
+    getSelectionPosition: () => selectionPosition
+  };
+}
+
+function handleContextMenuAction(message) {
+  const { action, targetLanguage, languageName } = message;
+  const selectedText = window.aiInputEnhancer?.getSelectedText();
+  const selectionPosition = window.aiInputEnhancer?.getSelectionPosition();
+  
+  if (!selectedText) {
+    showNotification('No text selected', 'error');
+    return;
+  }
+  
+  // Handle translation with specific language
+  if (action === 'translate' && targetLanguage) {
+    handleRightClickTranslate(selectedText, targetLanguage, languageName, selectionPosition);
+  } else {
+    handleRightClickAction(action, selectedText, selectionPosition);
+  }
+}
+
+function handleRightClickTranslate(text, languageCode, languageName, position) {
+  chrome.runtime.sendMessage({
+    type: "AI_REQUEST",
+    action: "translate",
+    text: text,
+    targetLanguage: languageCode,
+    languageName: languageName,
+    isRightClick: true,
+    position: position
+  });
+
+  showNotification(`Translating to ${languageName}...`, "info");
+}
+
+function handleRightClickAction(action, text, position) {
+  chrome.runtime.sendMessage({
+    type: "AI_REQUEST",
+    action: action,
+    text: text,
+    isRightClick: true,
+    position: position
+  });
+
+  showNotification(`Processing ${action}...`, "info");
 }
 
 // === Input Field Detection ===
@@ -172,8 +312,8 @@ function updateButtonPosition(input) {
   if (!currentButton || !input) return;
 
   const rect = input.getBoundingClientRect();
-  const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
-  const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+  const scrollX = window.scrollX || document.documentElement.scrollLeft;
+  const scrollY = window.scrollY || document.documentElement.scrollTop;
 
   // Position button at top-right corner of input
   currentButton.style.left = `${rect.right + scrollX - 30}px`;
@@ -200,7 +340,12 @@ function showContextDropdown(button, input) {
   `;
 
   const actions = [
-    { id: "translate", label: "🌐 Translate", description: "Translate text" },
+    {
+      id: "translate",
+      label: "🌐 Translate",
+      description: "Translate text",
+      hasSubmenu: true,
+    },
     {
       id: "proofread",
       label: "✏️ Proofread",
@@ -220,6 +365,9 @@ function showContextDropdown(button, input) {
   ];
 
   actions.forEach((action, index) => {
+    // Skip disabled features
+    if (!userSettings?.features[action.id]) return;
+
     const item = document.createElement("div");
     item.style.cssText = `
       padding: 12px 16px;
@@ -228,33 +376,47 @@ function showContextDropdown(button, input) {
         index < actions.length - 1 ? "1px solid #f0f0f0" : "none"
       };
       transition: background-color 0.2s ease;
+      position: relative;
     `;
 
+    const arrow = action.hasSubmenu
+      ? '<span style="float: right; color: #666; margin-top: 2px;">▶</span>'
+      : "";
+
     item.innerHTML = `
-      <div style="font-weight: 500; color: #333; margin-bottom: 2px;">${action.label}</div>
+      <div style="font-weight: 500; color: #333; margin-bottom: 2px;">${action.label}${arrow}</div>
       <div style="font-size: 12px; color: #666;">${action.description}</div>
     `;
 
     item.addEventListener("mouseenter", () => {
       item.style.backgroundColor = "#f8f9fa";
+
+      // Show submenu for translate
+      if (action.hasSubmenu && action.id === "translate") {
+        showLanguageSubmenu(item, input);
+      } else {
+        hideSubmenu();
+      }
     });
 
     item.addEventListener("mouseleave", () => {
       item.style.backgroundColor = "transparent";
     });
 
-    item.addEventListener("click", () => {
-      handleContextAction(action.id, input);
-      hideContextDropdown();
-    });
+    if (!action.hasSubmenu) {
+      item.addEventListener("click", () => {
+        handleContextAction(action.id, input);
+        hideContextDropdown();
+      });
+    }
 
     dropdown.appendChild(item);
   });
 
   // Position dropdown
   const buttonRect = button.getBoundingClientRect();
-  const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
-  const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+  const scrollX = window.scrollX || document.documentElement.scrollLeft;
+  const scrollY = window.scrollY || document.documentElement.scrollTop;
 
   dropdown.style.left = `${buttonRect.left + scrollX}px`;
   dropdown.style.top = `${buttonRect.bottom + scrollY + 4}px`;
@@ -274,21 +436,138 @@ function hideContextDropdown() {
     currentDropdown = null;
     document.removeEventListener("click", handleOutsideClick);
   }
+  hideSubmenu();
+}
+
+function showLanguageSubmenu(parentItem, input) {
+  hideSubmenu();
+
+  if (!userSettings?.languages?.length) {
+    showNotification(
+      "No languages configured. Please set up languages in the extension popup.",
+      "warning"
+    );
+    return;
+  }
+
+  const submenu = document.createElement("div");
+  submenu.id = "anytext-language-submenu";
+  submenu.style.cssText = `
+    position: absolute;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    z-index: 2147483648;
+    min-width: 160px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    overflow: hidden;
+    max-height: 300px;
+    overflow-y: auto;
+  `;
+
+  // Add header
+  const header = document.createElement("div");
+  header.style.cssText = `
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e0e0e0;
+    font-size: 12px;
+    font-weight: 600;
+    color: #666;
+  `;
+  header.textContent = "Select Language";
+  submenu.appendChild(header);
+
+  userSettings.languages.forEach((language, index) => {
+    const item = document.createElement("div");
+    item.style.cssText = `
+      padding: 10px 12px;
+      cursor: pointer;
+      border-bottom: ${
+        index < userSettings.languages.length - 1 ? "1px solid #f0f0f0" : "none"
+      };
+      transition: background-color 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    `;
+
+    item.innerHTML = `
+      <span style="font-size: 16px;">${language.flag}</span>
+      <span style="font-weight: 500; color: #333;">${language.name}</span>
+    `;
+
+    item.addEventListener("mouseenter", () => {
+      item.style.backgroundColor = "#f8f9fa";
+    });
+
+    item.addEventListener("mouseleave", () => {
+      item.style.backgroundColor = "transparent";
+    });
+
+    item.addEventListener("click", () => {
+      handleTranslateAction(language.code, language.name, input);
+      hideContextDropdown();
+    });
+
+    submenu.appendChild(item);
+  });
+
+  // Position submenu to the right of parent item
+  const parentRect = parentItem.getBoundingClientRect();
+  const scrollX = window.scrollX || document.documentElement.scrollLeft;
+  const scrollY = window.scrollY || document.documentElement.scrollTop;
+
+  submenu.style.left = `${parentRect.right + scrollX + 4}px`;
+  submenu.style.top = `${parentRect.top + scrollY}px`;
+
+  document.body.appendChild(submenu);
+  currentSubmenu = submenu;
+}
+
+function hideSubmenu() {
+  if (currentSubmenu) {
+    currentSubmenu.remove();
+    currentSubmenu = null;
+  }
 }
 
 function handleOutsideClick(e) {
-  if (
-    currentDropdown &&
-    !currentDropdown.contains(e.target) &&
-    currentButton &&
-    !currentButton.contains(e.target)
-  ) {
+  const isInsideDropdown =
+    currentDropdown && currentDropdown.contains(e.target);
+  const isInsideSubmenu = currentSubmenu && currentSubmenu.contains(e.target);
+  const isInsideButton = currentButton && currentButton.contains(e.target);
+
+  if (!isInsideDropdown && !isInsideSubmenu && !isInsideButton) {
     hideContextDropdown();
   }
 }
 
 function isDropdownOpen() {
   return currentDropdown !== null;
+}
+
+function handleTranslateAction(languageCode, languageName, input) {
+  const selectedText = getSelectedText(input);
+
+  if (!selectedText) {
+    showNotification("Please select some text first", "error");
+    return;
+  }
+
+  // Send message to background script to handle translation
+  chrome.runtime.sendMessage({
+    type: "AI_REQUEST",
+    action: "translate",
+    text: selectedText,
+    targetLanguage: languageCode,
+    languageName: languageName,
+    inputElement: input.tagName,
+  });
+
+  showNotification(`Translating to ${languageName}...`, "info");
 }
 
 function handleContextAction(actionId, input) {
@@ -324,8 +603,13 @@ function getSelectedText(input) {
 
 // === Message Handlers ===
 function handleAIResult(message) {
-  const { action, originalText, result } = message;
-  showResultModal(action, originalText, result);
+  const { action, originalText, result, isRightClick, position } = message;
+  
+  if (isRightClick) {
+    showResultPopover(action, originalText, result, position);
+  } else {
+    showResultModal(action, originalText, result);
+  }
 }
 
 function handleAIError(message) {
@@ -402,6 +686,171 @@ function showResultModal(action, originalText, result) {
   overlay.onclick = (e) => {
     if (e.target === overlay) overlay.remove();
   };
+}
+
+function showResultPopover(action, originalText, result, position) {
+  // Remove existing popover
+  const existingPopover = document.getElementById("anytext-popover");
+  if (existingPopover) {
+    existingPopover.remove();
+  }
+
+  const popover = document.createElement("div");
+  popover.id = "anytext-popover";
+  
+  // Position in bottom-right corner
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const popoverWidth = 350;
+  const popoverMaxHeight = 400;
+  
+  popover.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: ${popoverWidth}px;
+    max-height: ${popoverMaxHeight}px;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    z-index: 2147483647;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    overflow: hidden;
+    animation: slideInUp 0.3s ease-out;
+  `;
+
+  // Add animation keyframes
+  if (!document.getElementById('anytext-popover-styles')) {
+    const style = document.createElement('style');
+    style.id = 'anytext-popover-styles';
+    style.textContent = `
+      @keyframes slideInUp {
+        from {
+          transform: translateY(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+      @keyframes slideOutDown {
+        from {
+          transform: translateY(0);
+          opacity: 1;
+        }
+        to {
+          transform: translateY(100%);
+          opacity: 0;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  popover.innerHTML = `
+    <div style="padding: 16px; border-bottom: 1px solid #f0f0f0; background: linear-gradient(135deg, #4285f4, #34a853); color: white;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <h3 style="margin: 0; font-size: 16px; font-weight: 600; text-transform: capitalize;">${action} Result</h3>
+          <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9;">✨ AI Input Analyzer</p>
+        </div>
+        <button id="anytext-popover-close" style="background: rgba(255,255,255,0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;">&times;</button>
+      </div>
+    </div>
+    <div style="padding: 16px; max-height: 300px; overflow-y: auto;">
+      <div style="margin-bottom: 16px;">
+        <label style="display: block; font-weight: 600; color: #666; margin-bottom: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Original Text</label>
+        <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; font-size: 14px; line-height: 1.4; border-left: 3px solid #e0e0e0; max-height: 80px; overflow-y: auto;">${escapeHtml(originalText)}</div>
+      </div>
+      <div style="margin-bottom: 16px;">
+        <label style="display: block; font-weight: 600; color: #666; margin-bottom: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">AI Result</label>
+        <div id="anytext-popover-result" style="background: #f0f8ff; padding: 12px; border-radius: 8px; font-size: 14px; line-height: 1.4; border-left: 3px solid #4285f4; max-height: 120px; overflow-y: auto;">${escapeHtml(result)}</div>
+      </div>
+      <div style="display: flex; gap: 8px; justify-content: flex-end;">
+        <button id="anytext-popover-copy" style="background: #f8f9fa; color: #333; border: 1px solid #e0e0e0; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s;">Copy</button>
+        <button id="anytext-popover-insert" style="background: #4285f4; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s;">Insert</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(popover);
+
+  // Event handlers
+  const closeBtn = popover.querySelector("#anytext-popover-close");
+  const copyBtn = popover.querySelector("#anytext-popover-copy");
+  const insertBtn = popover.querySelector("#anytext-popover-insert");
+
+  closeBtn.addEventListener("click", () => {
+    popover.style.animation = "slideOutDown 0.3s ease-in";
+    setTimeout(() => popover.remove(), 300);
+  });
+
+  copyBtn.addEventListener("click", () => {
+    navigator.clipboard.writeText(result);
+    copyBtn.textContent = "Copied!";
+    copyBtn.style.background = "#34a853";
+    copyBtn.style.color = "white";
+    setTimeout(() => {
+      copyBtn.textContent = "Copy";
+      copyBtn.style.background = "#f8f9fa";
+      copyBtn.style.color = "#333";
+    }, 2000);
+  });
+
+  insertBtn.addEventListener("click", () => {
+    insertTextAtCursor(result, position);
+    popover.style.animation = "slideOutDown 0.3s ease-in";
+    setTimeout(() => popover.remove(), 300);
+    showNotification("Text inserted!", "success");
+  });
+
+  // Auto-close after 30 seconds
+  setTimeout(() => {
+    if (document.body.contains(popover)) {
+      popover.style.animation = "slideOutDown 0.3s ease-in";
+      setTimeout(() => popover.remove(), 300);
+    }
+  }, 30000);
+
+  // Close on click outside
+  setTimeout(() => {
+    const handleOutsideClick = (e) => {
+      if (!popover.contains(e.target)) {
+        popover.style.animation = "slideOutDown 0.3s ease-in";
+        setTimeout(() => popover.remove(), 300);
+        document.removeEventListener("click", handleOutsideClick);
+      }
+    };
+    document.addEventListener("click", handleOutsideClick);
+  }, 100);
+}
+
+function insertTextAtCursor(text, position) {
+  if (position && position.range) {
+    try {
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(position.range);
+      
+      // Try to replace the selected text
+      if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(document.createTextNode(text));
+        selection.removeAllRanges();
+      }
+    } catch (error) {
+      // Fallback: just copy to clipboard
+      navigator.clipboard.writeText(text);
+      showNotification("Text copied to clipboard (couldn't insert directly)", "info");
+    }
+  } else {
+    // Fallback: copy to clipboard
+    navigator.clipboard.writeText(text);
+    showNotification("Text copied to clipboard", "info");
+  }
 }
 
 // === Helpers ===
