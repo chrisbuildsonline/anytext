@@ -1,5 +1,4 @@
 // AI Input Enhancer - Content Script
-console.log("AnyText context script loaded");
 
 // Global state
 let currentActiveInput = null;
@@ -36,8 +35,6 @@ async function init() {
       case "SETTINGS_UPDATED":
         handleSettingsUpdate(message.settings);
         break;
-      default:
-        break;
     }
   });
 }
@@ -66,7 +63,6 @@ async function loadUserSettings() {
       ],
     };
   } catch (error) {
-    console.error("Error loading settings:", error);
     // Use default settings
     userSettings = {
       features: {
@@ -88,7 +84,6 @@ async function loadUserSettings() {
 }
 
 function handleSettingsUpdate(newSettings) {
-  console.log("Settings updated:", newSettings);
   userSettings = newSettings;
 
   // If dropdown is currently open, refresh it
@@ -183,7 +178,13 @@ function handleRightClickTranslate(text, languageCode, languageName, position) {
     position: position,
   });
 
-  showNotification(`Translating to ${languageName}...`, "info");
+  // Show loading state for right-click translation
+  showLoadingPreview(
+    "translate",
+    `Translating to ${languageName}`,
+    null,
+    position
+  );
 }
 
 function handleRightClickAction(action, text, position) {
@@ -195,7 +196,18 @@ function handleRightClickAction(action, text, position) {
     position: position,
   });
 
-  showNotification(`Processing ${action}...`, "info");
+  // Show loading state for right-click actions
+  const actionNames = {
+    proofread: "Proofreading text",
+    rewrite: "Rewriting text",
+    summarize: "Summarizing text",
+  };
+  showLoadingPreview(
+    action,
+    actionNames[action] || `Processing ${action}`,
+    null,
+    position
+  );
 }
 
 // === Input Field Detection ===
@@ -292,9 +304,7 @@ function showContextButton(input) {
   const button = document.createElement("button");
   button.id = "anytext-context-button";
 
-  // Debug the icon URL
   const iconUrl = chrome.runtime.getURL("icons/icon-16.png");
-  console.log("Icon URL:", iconUrl);
 
   // Create image element with error handling
   const img = document.createElement("img");
@@ -316,6 +326,7 @@ function showContextButton(input) {
     display: flex;
     align-items: center;
     justify-content: center;
+    opacity: 50%;
     padding: 4px;
   `;
 
@@ -323,6 +334,7 @@ function showContextButton(input) {
   button.addEventListener("mouseenter", () => {
     button.style.transform = "scale(1.1)";
     button.style.boxShadow = "0 4px 12px rgba(0,0,0,0.3)";
+    button.style.opacity = "100%";
   });
 
   button.addEventListener("mouseleave", () => {
@@ -409,13 +421,7 @@ function showContextDropdown(button, input) {
       id: "rewrite",
       label: "📝 Rewrite",
       description: "Improve writing style",
-    },
-    { id: "summarize", label: "📄 Summarize", description: "Create summary" },
-    {
-      id: "generate",
-      label: "✨ Generate",
-      description: "Generate new content",
-    },
+    }
   ];
 
   // Filter enabled actions first
@@ -446,6 +452,16 @@ function showContextDropdown(button, input) {
     item.addEventListener("mouseenter", () => {
       item.style.backgroundColor = "#f8f9fa";
 
+      // Clear any pending hide timeouts when hovering parent
+      if (window.languageSubmenuHideTimeout) {
+        clearTimeout(window.languageSubmenuHideTimeout);
+        window.languageSubmenuHideTimeout = null;
+      }
+      if (window.toneSubmenuHideTimeout) {
+        clearTimeout(window.toneSubmenuHideTimeout);
+        window.toneSubmenuHideTimeout = null;
+      }
+
       // Show submenu for translate or change tone
       if (action.hasSubmenu && action.id === "translate") {
         showLanguageSubmenu(item, input);
@@ -464,7 +480,12 @@ function showContextDropdown(button, input) {
         action.hasSubmenu &&
         (action.id === "translate" || action.id === "changeTone")
       ) {
-        setTimeout(() => {
+        // Use the same timeout system as the submenu
+        const timeoutKey =
+          action.id === "translate"
+            ? "languageSubmenuHideTimeout"
+            : "toneSubmenuHideTimeout";
+        window[timeoutKey] = setTimeout(() => {
           // Only hide if mouse is not over the submenu
           if (currentSubmenu && !isMouseOverSubmenu()) {
             hideSubmenu();
@@ -537,27 +558,14 @@ function showLanguageSubmenu(parentItem, input) {
     overflow-y: auto;
   `;
 
-  // Add header
-  const header = document.createElement("div");
-  header.style.cssText = `
-    padding: 12px 16px;
-    background: linear-gradient(135deg, #4285f4, #34a853);
-    color: white;
-    font-size: 14px;
-    font-weight: 600;
-  `;
-  header.innerHTML = `
-    <div style="display: flex; align-items: center; gap: 8px;">
-      <span>🌐</span>
-      <span>Translate</span>
-    </div>
-  `;
-  submenu.appendChild(header);
-
   // Add "From" language selector
   const fromSection = document.createElement("div");
   fromSection.style.cssText = `
-    padding: 12px 16px;
+    display: flex;
+    align-items: center;gap: 10px;
+    justify-content: center;
+    padding: 5px 16px;
+    background: rgb(248, 249, 250);
     border-bottom: 1px solid #e0e0e0;
     background: #f8f9fa;
   `;
@@ -567,7 +575,6 @@ function showLanguageSubmenu(parentItem, input) {
     font-size: 12px;
     font-weight: 600;
     color: #666;
-    margin-bottom: 8px;
   `;
   fromLabel.textContent = "From:";
   fromSection.appendChild(fromLabel);
@@ -618,9 +625,6 @@ function showLanguageSubmenu(parentItem, input) {
 
   // Add "To" language section
   const toSection = document.createElement("div");
-  toSection.style.cssText = `
-    padding: 12px 16px 8px 16px;
-  `;
 
   const toLabel = document.createElement("div");
   toLabel.style.cssText = `
@@ -629,7 +633,6 @@ function showLanguageSubmenu(parentItem, input) {
     color: #666;
     margin-bottom: 8px;
   `;
-  toLabel.textContent = "To:";
   toSection.appendChild(toLabel);
   submenu.appendChild(toSection);
 
@@ -637,7 +640,7 @@ function showLanguageSubmenu(parentItem, input) {
   userSettings.languages.forEach((language, index) => {
     const item = document.createElement("div");
     item.style.cssText = `
-      padding: 10px 16px;
+      padding: 6px 0;
       cursor: pointer;
       border-bottom: ${
         index < userSettings.languages.length - 1 ? "1px solid #f0f0f0" : "none"
@@ -672,24 +675,29 @@ function showLanguageSubmenu(parentItem, input) {
     submenu.appendChild(item);
   });
 
-  // Position submenu to the right of parent item
+  // Position submenu closer to the right of parent item
   const parentRect = parentItem.getBoundingClientRect();
   const scrollX = window.scrollX || document.documentElement.scrollLeft;
   const scrollY = window.scrollY || document.documentElement.scrollTop;
 
-  submenu.style.left = `${parentRect.right + scrollX + 4}px`;
+  // Position closer to parent (reduce gap from 4px to 2px)
+  submenu.style.left = `${parentRect.right + scrollX + 2}px`;
   submenu.style.top = `${parentRect.top + scrollY}px`;
 
-  // Add mouse event handlers to keep submenu open
+  // Add mouse event handlers with better timing
   submenu.addEventListener("mouseenter", () => {
-    // Keep submenu open when mouse enters
+    // Clear any pending hide timeout when mouse enters submenu
+    if (window.languageSubmenuHideTimeout) {
+      clearTimeout(window.languageSubmenuHideTimeout);
+      window.languageSubmenuHideTimeout = null;
+    }
   });
 
   submenu.addEventListener("mouseleave", () => {
-    // Hide submenu when mouse leaves
-    setTimeout(() => {
+    // Longer delay to allow mouse movement back to parent
+    window.languageSubmenuHideTimeout = setTimeout(() => {
       hideSubmenu();
-    }, 100);
+    }, 300);
   });
 
   document.body.appendChild(submenu);
@@ -731,32 +739,22 @@ function showToneSubmenu(parentItem, input) {
     {
       id: "professional",
       name: "Professional",
-      icon: "💼",
-      description: "Formal and business-appropriate",
     },
     {
       id: "casual",
       name: "Casual",
-      icon: "😊",
-      description: "Relaxed and conversational",
     },
     {
       id: "straightforward",
       name: "Straightforward",
-      icon: "📝",
-      description: "Direct and to the point",
     },
     {
       id: "confident",
       name: "Confident",
-      icon: "💪",
-      description: "Assertive and self-assured",
     },
     {
       id: "friendly",
       name: "Friendly",
-      icon: "🤝",
-      description: "Warm and approachable",
     },
   ];
 
@@ -771,10 +769,8 @@ function showToneSubmenu(parentItem, input) {
 
     item.innerHTML = `
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
-        <span style="font-size: 16px;">${tone.icon}</span>
         <span style="font-weight: 500; color: #333;">${tone.name}</span>
       </div>
-      <div style="font-size: 11px; color: #666; margin-left: 24px;">${tone.description}</div>
     `;
 
     item.addEventListener("mouseenter", () => {
@@ -793,24 +789,29 @@ function showToneSubmenu(parentItem, input) {
     submenu.appendChild(item);
   });
 
-  // Position submenu to the right of parent item
+  // Position submenu closer to the right of parent item
   const parentRect = parentItem.getBoundingClientRect();
   const scrollX = window.scrollX || document.documentElement.scrollLeft;
   const scrollY = window.scrollY || document.documentElement.scrollTop;
 
-  submenu.style.left = `${parentRect.right + scrollX + 4}px`;
+  // Position closer to parent (reduce gap from 4px to 2px)
+  submenu.style.left = `${parentRect.right + scrollX + 2}px`;
   submenu.style.top = `${parentRect.top + scrollY}px`;
 
-  // Add mouse event handlers to keep submenu open
+  // Add mouse event handlers with better timing
   submenu.addEventListener("mouseenter", () => {
-    // Keep submenu open when mouse enters
+    // Clear any pending hide timeout when mouse enters submenu
+    if (window.toneSubmenuHideTimeout) {
+      clearTimeout(window.toneSubmenuHideTimeout);
+      window.toneSubmenuHideTimeout = null;
+    }
   });
 
   submenu.addEventListener("mouseleave", () => {
-    // Hide submenu when mouse leaves
-    setTimeout(() => {
+    // Longer delay to allow mouse movement back to parent
+    window.toneSubmenuHideTimeout = setTimeout(() => {
       hideSubmenu();
-    }, 100);
+    }, 300);
   });
 
   document.body.appendChild(submenu);
@@ -887,6 +888,7 @@ function handleTranslateAction(
   }
 
   // Send message to background script to handle translation
+
   chrome.runtime.sendMessage({
     type: "AI_REQUEST",
     action: "translate",
@@ -901,12 +903,8 @@ function handleTranslateAction(
     textEnd: textInfo.end,
   });
 
-  const fromText =
-    fromLanguage === "auto" ? "auto-detected language" : fromLanguage;
-  showNotification(
-    `Translating from ${fromText} to ${languageName}...`,
-    "info"
-  );
+  // Show loading state instead of notification
+  showLoadingPreview("translate", `Translating to ${languageName}`, input);
 }
 
 function handleToneChangeAction(toneId, toneName, input) {
@@ -931,7 +929,8 @@ function handleToneChangeAction(toneId, toneName, input) {
     textEnd: textInfo.end,
   });
 
-  showNotification(`Changing tone to ${toneName}...`, "info");
+  // Show loading state instead of notification
+  showLoadingPreview("changeTone", `Changing tone to ${toneName}`, input);
 }
 
 function handleContextAction(actionId, input) {
@@ -972,7 +971,18 @@ function handleContextAction(actionId, input) {
     textEnd: textEnd,
   });
 
-  showNotification(`Processing ${actionId}...`, "info");
+  // Show loading state instead of notification
+  const actionNames = {
+    proofread: "Proofreading text",
+    rewrite: "Rewriting text",
+    summarize: "Summarizing text",
+    generate: "Generating content",
+  };
+  showLoadingPreview(
+    actionId,
+    actionNames[actionId] || `Processing ${actionId}`,
+    input
+  );
 }
 
 function getSelectedText(input) {
@@ -1041,6 +1051,9 @@ function getTextFromInput(input) {
 
 // === Message Handlers ===
 function handleAIResult(message) {
+  // Store the message data globally for regeneration
+  window.lastAIMessage = message;
+
   const {
     action,
     originalText,
@@ -1053,30 +1066,618 @@ function handleAIResult(message) {
     textEnd,
   } = message;
 
-  if (isRightClick) {
-    showResultPopover(action, originalText, result, position);
-  } else if (
-    isInputField &&
-    (action === "translate" || action === "proofread" || action === "rewrite")
-  ) {
-    // For input field actions that should replace text directly
-    replaceSelectedText(result, isFullText, textStart, textEnd);
-    const actionName =
-      action === "translate"
-        ? `Translated to ${message.languageName || "target language"}`
-        : action === "proofread"
-        ? "Proofread completed"
-        : "Text rewritten";
-    showNotification(`${actionName}!`, "success");
+  // Check if there's an existing preview showing loading state (from regeneration)
+  const existingPreview = document.getElementById("anytext-result-preview");
+  console.log(
+    "AI Result received. Existing preview:",
+    !!existingPreview,
+    "Has originalContent:",
+    !!existingPreview?.dataset.originalContent
+  );
+  if (existingPreview && existingPreview.dataset.originalContent) {
+    // This is a regeneration response - just update the content
+    console.log("Updating existing preview with result:", result);
+    updatePreviewContent(existingPreview, result);
+    return;
+  }
+
+  // Always show the result preview dropdown for all actions
+  if (isRightClick && position) {
+    showResultPreview(
+      action,
+      originalText,
+      result,
+      position,
+      null,
+      isFullText,
+      textStart,
+      textEnd
+    );
+  } else if (currentActiveInput) {
+    // Show preview near the input field button
+    const buttonRect = currentButton
+      ? currentButton.getBoundingClientRect()
+      : null;
+
+    let previewPosition;
+    if (buttonRect) {
+      // Calculate position relative to viewport, not absolute page position
+      let x = buttonRect.left + window.scrollX;
+      let y = buttonRect.bottom + window.scrollY + 4;
+
+      // Ensure the preview stays within the visible viewport
+      const maxY = window.scrollY + window.innerHeight - 300; // Leave 300px for preview height
+      const maxX = window.scrollX + window.innerWidth - 320; // Leave 320px for preview width
+
+      // Adjust if off-screen
+      if (y > maxY) {
+        y = buttonRect.top + window.scrollY - 10; // Show above button instead
+      }
+      if (x > maxX) {
+        x = maxX;
+      }
+
+      previewPosition = { x, y };
+    } else {
+      previewPosition = {
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+      };
+    }
+
+    showResultPreview(
+      action,
+      originalText,
+      result,
+      previewPosition,
+      currentActiveInput,
+      isFullText,
+      textStart,
+      textEnd
+    );
   } else {
-    // For other actions or non-input fields, show modal
-    showResultModal(action, originalText, result);
+    // Fallback to center of screen
+    const centerPosition = {
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+    };
+    showResultPreview(
+      action,
+      originalText,
+      result,
+      centerPosition,
+      null,
+      isFullText,
+      textStart,
+      textEnd
+    );
   }
 }
 
 function handleAIError(message) {
   const { action, error } = message;
   showNotification(`Error with ${action}: ${error}`, "error");
+}
+
+function showResultPreview(
+  action,
+  originalText,
+  result,
+  position,
+  inputElement,
+  isFullText,
+  textStart,
+  textEnd
+) {
+  // Check if there's already a preview to replace
+  let preview = document.getElementById("anytext-result-preview");
+  const isReplacingExisting = !!preview;
+
+  // Check if it's a loading preview (created by showLoadingPreview) vs a result preview showing loading
+  const isLoadingPreview =
+    preview && preview.dataset.isLoadingPreview === "true";
+  const isResultPreviewWithLoading = preview && preview.dataset.originalContent;
+
+  if (!isReplacingExisting) {
+    // Create new preview if not replacing existing
+    preview = document.createElement("div");
+  }
+  preview.id = "anytext-result-preview";
+  preview.style.cssText = `
+    position: absolute;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    z-index: 2147483648;
+    min-width: 400px;
+    max-width: 500px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    overflow: hidden;
+  `;
+
+  // Action icons
+  const actionIcons = {
+    translate: "🌐",
+    changeTone: "🎭",
+    proofread: "✏️",
+    rewrite: "📝",
+    summarize: "📄",
+    generate: "✨",
+  };
+
+  // Action names
+  const actionNames = {
+    translate: "Translation",
+    changeTone: "Tone Change",
+    proofread: "Proofreading",
+    rewrite: "Rewriting",
+    summarize: "Summary",
+    generate: "Generated Content",
+  };
+
+  // Clear any stored original content since we're showing new results
+  delete preview.dataset.originalContent;
+
+  preview.innerHTML = `
+    <div style="padding: 7px 20px; background: linear-gradient(135deg, #4285f4, #2383ac); color: white; display: flex; align-items: center; justify-content: space-between;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 18px;">${actionIcons[action] || "🤖"}</span>
+        <span style="font-weight: 600;">${actionNames[action] || action}</span>
+      </div>
+      <button id="dismiss-btn" style="background: none;border: none;color: white;width: 19px;height: 24px;border-radius: 46%;cursor: pointer;display: flex;align-items: center;padding: 0;justify-content: center;margin: 0;font-size: 16px;transition: background 0.2s;">×</button>
+    </div>
+    
+    <div style="padding: 20px;">
+      <div style="margin-bottom: 16px;">
+        <div style="font-size: 12px; font-weight: 600; color: #666; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Preview</div>
+        <div style="background: #f8f9fa; padding: 16px; border-radius: 8px;  line-height: 1.5; max-height: 200px; overflow-y: auto;">
+          ${escapeHtml(result)}
+        </div>
+      </div>
+      
+      <div style="display: flex; gap: 8px; justify-content: space-between;">
+        <button id="regenerate-btn" style="background: #f8f9fa; color: #666; border: 1px solid #e0e0e0; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s; display: flex; align-items: center; gap: 4px;">🔄 Regenerate</button>
+        <div style="display: flex; gap: 8px;">
+          <button id="insert-btn" style="background: #f8f9fa; color: #333; border: 1px solid #e0e0e0; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s;">Insert</button>
+          <button id="replace-btn" style="background: #4285f4; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s;">Replace</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Position the preview
+  preview.style.left = `${position.x}px`;
+  preview.style.top = `${position.y}px`;
+
+  // Add event listeners
+  const dismissBtn = preview.querySelector("#dismiss-btn");
+  const insertBtn = preview.querySelector("#insert-btn");
+  const replaceBtn = preview.querySelector("#replace-btn");
+  const regenerateBtn = preview.querySelector("#regenerate-btn");
+
+  dismissBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    hideResultPreview();
+  });
+
+  dismissBtn.addEventListener("mouseenter", () => {
+    dismissBtn.style.background = "rgba(255,255,255,0.3)";
+  });
+
+  dismissBtn.addEventListener("mouseleave", () => {
+    dismissBtn.style.background = "rgba(255,255,255,0.2)";
+  });
+
+  insertBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (inputElement) {
+      insertTextAtInput(result, inputElement, false);
+      showNotification("Text inserted!", "success");
+    } else {
+      // Copy to clipboard as fallback
+      navigator.clipboard.writeText(result).then(() => {
+        showNotification("Copied to clipboard!", "success");
+      });
+    }
+    hideResultPreview();
+  });
+
+  insertBtn.addEventListener("mouseenter", () => {
+    insertBtn.style.background = "#e8f0fe";
+    insertBtn.style.borderColor = "#4285f4";
+    insertBtn.style.color = "#4285f4";
+  });
+
+  insertBtn.addEventListener("mouseleave", () => {
+    insertBtn.style.background = "#f8f9fa";
+    insertBtn.style.borderColor = "#e0e0e0";
+    insertBtn.style.color = "#333";
+  });
+
+  replaceBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (inputElement) {
+      replaceSelectedText(result, isFullText, textStart, textEnd);
+      const actionName = actionNames[action] || action;
+      showNotification(`${actionName} applied!`, "success");
+    } else {
+      // Copy to clipboard as fallback
+      navigator.clipboard.writeText(result).then(() => {
+        showNotification("Copied to clipboard!", "success");
+      });
+    }
+    hideResultPreview();
+  });
+
+  replaceBtn.addEventListener("mouseenter", () => {
+    replaceBtn.style.background = "#1a73e8";
+  });
+
+  replaceBtn.addEventListener("mouseleave", () => {
+    replaceBtn.style.background = "#4285f4";
+  });
+
+  // Store the original request data for regeneration (get from global state)
+  if (!preview.dataset.requestData) {
+    // Store the last request data from the global message context
+    const lastMessage = window.lastAIMessage || {};
+    preview.dataset.requestData = JSON.stringify({
+      action,
+      originalText,
+      inputElement: inputElement
+        ? {
+            tagName: inputElement.tagName,
+            isContentEditable: inputElement.contentEditable === "true",
+          }
+        : null,
+      isFullText,
+      textStart,
+      textEnd,
+      position,
+      // Store additional parameters from the original message
+      targetLanguage: lastMessage.targetLanguage,
+      languageName: lastMessage.languageName,
+      sourceLanguage: lastMessage.sourceLanguage,
+      tone: lastMessage.tone,
+      toneName: lastMessage.toneName,
+    });
+  }
+
+  regenerateBtn.addEventListener("click", (e) => {
+    // Prevent the click from bubbling up and triggering outside click handler
+    e.stopPropagation();
+
+    console.log("Regenerate button clicked");
+    const requestData = JSON.parse(preview.dataset.requestData);
+    console.log("Request data:", requestData);
+
+    // Show loading state in the current preview instead of creating a new one
+    showLoadingInPreview(
+      preview,
+      `Regenerating ${actionNames[requestData.action] || requestData.action}...`
+    );
+
+    // Send the same request again to background script with all original parameters
+    const message = {
+      type: "AI_REQUEST",
+      action: requestData.action,
+      text: requestData.originalText,
+      inputElement: requestData.inputElement?.tagName,
+      isInputField: !!requestData.inputElement,
+      isFullText: requestData.isFullText,
+      textStart: requestData.textStart,
+      textEnd: requestData.textEnd,
+    };
+
+    // Add specific properties based on action type using stored data
+    if (requestData.action === "translate") {
+      message.targetLanguage = requestData.targetLanguage || "es";
+      message.languageName = requestData.languageName || "Spanish";
+      message.sourceLanguage = requestData.sourceLanguage || "auto";
+    } else if (requestData.action === "changeTone") {
+      message.tone = requestData.tone || "professional";
+      message.toneName = requestData.toneName || "Professional";
+    }
+
+    console.log("Sending regenerate message:", message);
+    chrome.runtime.sendMessage(message);
+  });
+
+  regenerateBtn.addEventListener("mouseenter", () => {
+    regenerateBtn.style.background = "#e8f0fe";
+    regenerateBtn.style.borderColor = "#4285f4";
+    regenerateBtn.style.color = "#4285f4";
+  });
+
+  regenerateBtn.addEventListener("mouseleave", () => {
+    regenerateBtn.style.background = "#f8f9fa";
+    regenerateBtn.style.borderColor = "#e0e0e0";
+    regenerateBtn.style.color = "#666";
+  });
+
+  // Add to DOM if not already there
+  if (!isReplacingExisting) {
+    document.body.appendChild(preview);
+  }
+
+  // Adjust position if it goes off screen
+  const rect = preview.getBoundingClientRect();
+
+  if (rect.right > window.innerWidth) {
+    const newLeft = window.innerWidth - rect.width - 20;
+    preview.style.left = `${newLeft}px`;
+  }
+  if (rect.bottom > window.innerHeight) {
+    const newTop = position.y - rect.height - 10;
+    preview.style.top = `${newTop}px`;
+  }
+
+  // Close on outside click (only add if not already added)
+  if (!isReplacingExisting) {
+    setTimeout(() => {
+      document.addEventListener("click", handlePreviewOutsideClick);
+    }, 0);
+  }
+}
+
+function showLoadingInPreview(preview, loadingText) {
+  console.log("showLoadingInPreview called with:", loadingText);
+  // Find the preview content area (the div with the result text)
+  // Try multiple selectors to find the content div
+  let previewContentDiv = preview.querySelector('div[style*="background: #f8f9fa"]') ||
+                          preview.querySelector('div[style*="background: rgb(248, 249, 250)"]') ||
+                          preview.querySelector('div[style*="padding: 16px"][style*="border-radius: 8px"]');
+  
+  if (!previewContentDiv) {
+    console.log("Could not find preview content div");
+    console.log("Available divs:", preview.querySelectorAll('div'));
+    return;
+  }
+  console.log("Found preview content div, adding spinner");
+
+  // Store the original content if not already stored
+  if (!preview.dataset.originalContent) {
+    preview.dataset.originalContent = previewContentDiv.innerHTML;
+  }
+
+  // Add spinner CSS if not already added
+  if (!document.getElementById("anytext-spinner-styles")) {
+    const style = document.createElement("style");
+    style.id = "anytext-spinner-styles";
+    style.textContent = `
+      @keyframes anytext-spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      .anytext-spinner {
+        width: 24px;
+        height: 24px;
+        border: 3px solid #e0e0e0;
+        border-top: 3px solid #4285f4;
+        border-radius: 50%;
+        animation: anytext-spin 1s linear infinite;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // Make sure the preview content div has relative positioning
+  previewContentDiv.style.position = "relative";
+
+  // Create spinner overlay element
+  const spinnerOverlay = document.createElement("div");
+  spinnerOverlay.className = "anytext-spinner-loading";
+  spinnerOverlay.style.cssText = `
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(248, 249, 250, 0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    z-index: 10;
+  `;
+
+  spinnerOverlay.innerHTML = '<div class="anytext-spinner"></div>';
+  previewContentDiv.appendChild(spinnerOverlay);
+
+  // Disable all buttons during loading
+  const buttons = preview.querySelectorAll("button:not(#dismiss-btn)");
+  buttons.forEach((button) => {
+    button.disabled = true;
+    button.style.opacity = "0.5";
+    button.style.cursor = "not-allowed";
+  });
+}
+
+function updatePreviewContent(preview, result) {
+  console.log("updatePreviewContent called with result:", result);
+  // Find the preview content div (the one with the result text)
+  // Try multiple selectors to find the content div
+  let previewContentDiv = preview.querySelector('div[style*="background: #f8f9fa"]') ||
+                          preview.querySelector('div[style*="background: rgb(248, 249, 250)"]') ||
+                          preview.querySelector('div[style*="padding: 16px"][style*="border-radius: 8px"]');
+
+  // If not found, it might be because we added a spinner overlay, so look for the parent
+  if (!previewContentDiv) {
+    // Look for a div that contains the spinner overlay
+    const divWithSpinner = preview.querySelector(".anytext-spinner-loading");
+    if (divWithSpinner && divWithSpinner.parentElement) {
+      previewContentDiv = divWithSpinner.parentElement;
+    }
+  }
+
+  if (!previewContentDiv) {
+    console.log("Could not find preview content div for update");
+    console.log("Preview HTML:", preview.innerHTML);
+    return;
+  }
+  console.log("Found preview content div, updating content");
+
+  // Remove spinner overlay if it exists
+  const spinnerOverlay = previewContentDiv.querySelector(
+    ".anytext-spinner-loading"
+  );
+  if (spinnerOverlay) {
+    spinnerOverlay.remove();
+  }
+
+  // Update the result text content while preserving the styling
+  previewContentDiv.innerHTML = escapeHtml(result);
+  
+  // Ensure the styling is preserved for future spinner overlays
+  if (!previewContentDiv.style.position) {
+    previewContentDiv.style.position = "relative";
+  }
+
+  // Re-enable all buttons
+  const buttons = preview.querySelectorAll("button:not(#dismiss-btn)");
+  buttons.forEach((button) => {
+    button.disabled = false;
+    button.style.opacity = "1";
+    button.style.cursor = "pointer";
+  });
+
+  // Clear the loading state marker
+  delete preview.dataset.originalContent;
+}
+
+function showLoadingPreview(action, loadingText, inputElement, position) {
+  // Remove any existing preview
+  hideResultPreview();
+
+  const preview = document.createElement("div");
+  preview.id = "anytext-result-preview";
+  preview.dataset.isLoadingPreview = "true";
+  preview.style.cssText = `
+    position: absolute;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    z-index: 2147483648;
+    min-width: 280px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    overflow: hidden;
+  `;
+
+  // Action icons
+  const actionIcons = {
+    translate: "🌐",
+    changeTone: "🎭",
+    proofread: "✏️",
+    rewrite: "📝",
+    summarize: "📄",
+    generate: "✨",
+  };
+
+  preview.innerHTML = `
+    <div style="padding: 7px 20px; background: linear-gradient(135deg, #4285f4, #2383ac); color: white; display: flex; align-items: center; justify-content: space-between;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div class="loading-spinner" style="width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top: 2px solid white; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+        <span style="font-size: 12px; font-weight: 600;">${loadingText}</span>
+      </div>
+      <button id="dismiss-btn" style="background: none;border: none;color: white;width: 19px;height: 24px;border-radius: 46%;cursor: pointer;display: flex;align-items: center;padding: 0;justify-content: center;margin: 0;font-size: 16px;transition: background 0.2s;">×</button>
+    </div>
+    
+    <div style="padding: 20px; text-align: center; color: #666;">
+      <div style="margin-bottom: 8px;">Processing your request...</div>
+      <div style="font-size: 12px;">This may take a moment</div>
+    </div>
+  `;
+
+  // Add CSS animation for spinner
+  if (!document.getElementById("anytext-spinner-styles")) {
+    const style = document.createElement("style");
+    style.id = "anytext-spinner-styles";
+    style.textContent = `
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // Position the preview
+  if (position) {
+    preview.style.left = `${position.x}px`;
+    preview.style.top = `${position.y}px`;
+  } else if (currentButton) {
+    const buttonRect = currentButton.getBoundingClientRect();
+    preview.style.left = `${buttonRect.left + window.scrollX}px`;
+    preview.style.top = `${buttonRect.bottom + window.scrollY + 4}px`;
+  } else {
+    preview.style.left = `${window.innerWidth / 2 - 140}px`;
+    preview.style.top = `${window.innerHeight / 2 - 50}px`;
+  }
+
+  // Add dismiss button functionality
+  const dismissBtn = preview.querySelector("#dismiss-btn");
+  dismissBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    hideResultPreview();
+  });
+
+  dismissBtn.addEventListener("mouseenter", () => {
+    dismissBtn.style.background = "rgba(255,255,255,0.3)";
+  });
+
+  dismissBtn.addEventListener("mouseleave", () => {
+    dismissBtn.style.background = "rgba(255,255,255,0.2)";
+  });
+
+  // Add to DOM
+  document.body.appendChild(preview);
+
+  // Adjust position if it goes off screen
+  const rect = preview.getBoundingClientRect();
+  if (rect.right > window.innerWidth) {
+    preview.style.left = `${window.innerWidth - rect.width - 20}px`;
+  }
+  if (rect.bottom > window.innerHeight) {
+    const newTop = position
+      ? position.y - rect.height - 10
+      : currentButton
+      ? currentButton.getBoundingClientRect().top +
+        window.scrollY -
+        rect.height -
+        4
+      : window.innerHeight / 2 - rect.height / 2;
+    preview.style.top = `${newTop}px`;
+  }
+
+  // Close on outside click
+  setTimeout(() => {
+    document.addEventListener("click", handlePreviewOutsideClick);
+  }, 0);
+}
+
+function hideResultPreview() {
+  const preview = document.getElementById("anytext-result-preview");
+  if (preview) {
+    preview.remove();
+    document.removeEventListener("click", handlePreviewOutsideClick);
+  }
+}
+
+function handlePreviewOutsideClick(e) {
+  const preview = document.getElementById("anytext-result-preview");
+  if (preview && !preview.contains(e.target)) {
+    hideResultPreview();
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
 }
 
 // === UI ===
@@ -1121,13 +1722,13 @@ function showResultModal(action, originalText, result) {
     </div>
     <div style="margin-bottom:20px;">
       <label style="display:block;font-weight:600;color:#666;margin-bottom:8px;">Result:</label>
-      <div id="anytext-result" style="background:#f0f8ff;padding:12px;border-radius:6px;font-size:14px;border-left:4px solid #4285f4;">${escapeHtml(
+      <div id="anytext-result" style="background:#f0f8ff;padding:12px;border-radius:6px;font-size:14px;">${escapeHtml(
         result
       )}</div>
     </div>
     <div style="display:flex;gap:12px;justify-content:flex-end;">
       <button id="anytext-copy" style="background:#4285f4;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;">Copy</button>
-      <button id="anytext-replace" style="background:#34a853;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;">Replace</button>
+      <button id="anytext-replace" style="background:#2383ac;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;">Replace</button>
     </div>
   `;
 
@@ -1212,7 +1813,7 @@ function showResultPopover(action, originalText, result, position) {
   }
 
   popover.innerHTML = `
-    <div style="padding: 16px; border-bottom: 1px solid #f0f0f0; background: linear-gradient(135deg, #4285f4, #34a853); color: white;">
+    <div style="padding: 16px; border-bottom: 1px solid #f0f0f0; background: linear-gradient(135deg, #4285f4, #2383ac); color: white;">
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
           <h3 style="margin: 0; font-size: 16px; font-weight: 600; text-transform: capitalize;">${action} Result</h3>
@@ -1256,7 +1857,7 @@ function showResultPopover(action, originalText, result, position) {
   copyBtn.addEventListener("click", () => {
     navigator.clipboard.writeText(result);
     copyBtn.textContent = "Copied!";
-    copyBtn.style.background = "#34a853";
+    copyBtn.style.background = "#2383ac";
     copyBtn.style.color = "white";
     setTimeout(() => {
       copyBtn.textContent = "Copy";
@@ -1409,7 +2010,7 @@ function replaceSelectedText(
 function showNotification(message, type = "info") {
   const notification = document.createElement("div");
   const bgColor =
-    type === "error" ? "#ea4335" : type === "success" ? "#34a853" : "#4285f4";
+    type === "error" ? "#ea4335" : type === "success" ? "#2383ac" : "#4285f4";
   notification.style.cssText = `
     position: fixed; top: 20px; right: 20px;
     background: ${bgColor};

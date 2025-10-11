@@ -160,7 +160,6 @@ async function loadSettings() {
       currentSettings = { ...DEFAULT_SETTINGS, ...result.aiInputEnhancerSettings };
     }
   } catch (error) {
-    console.error('Error loading settings:', error);
     showStatusMessage('Error loading settings', 'error');
   }
 }
@@ -183,12 +182,10 @@ async function saveSettings() {
         }
       }
     } catch (error) {
-      console.log('Could not broadcast to all tabs:', error);
     }
     
     showStatusMessage('Settings saved successfully', 'success');
   } catch (error) {
-    console.error('Error saving settings:', error);
     showStatusMessage('Error saving settings', 'error');
   }
 }
