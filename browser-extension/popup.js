@@ -4,6 +4,7 @@
 const DEFAULT_SETTINGS = {
   features: {
     translate: true,
+    changeTone: true,
     proofread: true,
     rewrite: true,
     summarize: true,
@@ -167,6 +168,24 @@ async function loadSettings() {
 async function saveSettings() {
   try {
     await chrome.storage.sync.set({ aiInputEnhancerSettings: currentSettings });
+    
+    // Broadcast settings update to all content scripts
+    try {
+      const tabs = await chrome.tabs.query({});
+      for (const tab of tabs) {
+        try {
+          await chrome.tabs.sendMessage(tab.id, {
+            type: 'SETTINGS_UPDATED',
+            settings: currentSettings
+          });
+        } catch (error) {
+          // Ignore errors for tabs that don't have content scripts
+        }
+      }
+    } catch (error) {
+      console.log('Could not broadcast to all tabs:', error);
+    }
+    
     showStatusMessage('Settings saved successfully', 'success');
   } catch (error) {
     console.error('Error saving settings:', error);
@@ -188,6 +207,11 @@ function checkAIStatus() {
 }
 
 function setupEventListeners() {
+  // Tab navigation
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', handleTabSwitch);
+  });
+
   // Feature toggles
   document.querySelectorAll('.toggle-switch').forEach(toggle => {
     toggle.addEventListener('click', handleFeatureToggle);
@@ -196,6 +220,18 @@ function setupEventListeners() {
   // Language management
   document.getElementById('addLanguageBtn').addEventListener('click', showLanguageSelector);
   document.getElementById('resetLanguages').addEventListener('click', resetLanguages);
+}
+
+function handleTabSwitch(event) {
+  const targetTab = event.currentTarget.dataset.tab;
+  
+  // Remove active class from all tabs and content
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+  
+  // Add active class to clicked tab and corresponding content
+  event.currentTarget.classList.add('active');
+  document.getElementById(`${targetTab}-tab`).classList.add('active');
 }
 
 function handleFeatureToggle(event) {

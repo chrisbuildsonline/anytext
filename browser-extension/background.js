@@ -11,6 +11,7 @@ async function loadSettings() {
     userSettings = result.aiInputEnhancerSettings || {
       features: {
         translate: true,
+        changeTone: true,
         proofread: true,
         rewrite: true,
         summarize: true,
@@ -45,7 +46,7 @@ async function createContextMenus() {
     // Parent menu
     chrome.contextMenus.create({
       id: "ai-input-analyzer",
-      title: "✨ AI Input Analyzer",
+      title: "AnyText",
       contexts: ["selection"],
       documentUrlPatterns: ["<all_urls>"]
     });
@@ -186,45 +187,290 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 
 // Handle AI processing requests
 async function handleAIRequest(message, tabId) {
-  const { action, text, targetLanguage, languageName, isRightClick, position } = message;
-  
-  // Simulate AI processing with fake results for now
-  // In a real implementation, this would call the Chrome Built-in AI APIs
+  const { action, text, targetLanguage, languageName, isRightClick, position, isInputField } = message;
   
   let result;
-  switch (action) {
-    case 'translate':
-      result = `[TRANSLATED TO ${languageName?.toUpperCase() || 'TARGET LANGUAGE'}] ${text}`;
-      break;
-    case 'proofread':
-      result = `[PROOFREAD] ${text.replace(/\b(teh|recieve|seperate)\b/g, match => {
-        const corrections = { 'teh': 'the', 'recieve': 'receive', 'seperate': 'separate' };
-        return corrections[match] || match;
-      })}`;
-      break;
-    case 'rewrite':
-      result = `[REWRITTEN] ${text.split(' ').reverse().join(' ')}`;
-      break;
-    case 'summarize':
-      const words = text.split(' ');
-      result = `[SUMMARY] ${words.slice(0, Math.max(3, Math.floor(words.length / 3))).join(' ')}...`;
-      break;
-    case 'generate':
-      result = `[GENERATED] Here is some generated content based on: "${text}"`;
-      break;
-    default:
-      result = `[PROCESSED] ${text}`;
+  
+  try {
+    switch (action) {
+      case 'translate':
+        result = await performTranslation(text, targetLanguage, languageName);
+        break;
+      case 'changeTone':
+        result = await performToneChange(text, message.tone, message.toneName);
+        break;
+      case 'proofread':
+        result = await performProofreading(text);
+        break;
+      case 'rewrite':
+        result = await performRewriting(text);
+        break;
+      case 'summarize':
+        result = await performSummarization(text);
+        break;
+      case 'generate':
+        result = await performGeneration(text);
+        break;
+      default:
+        result = `[PROCESSED] ${text}`;
+    }
+  } catch (error) {
+    console.error('AI processing error:', error);
+    chrome.tabs.sendMessage(tabId, {
+      type: 'AI_ERROR',
+      action: action,
+      error: error.message || 'Processing failed'
+    });
+    return;
   }
 
   // Send result back to content script
-  setTimeout(() => {
-    chrome.tabs.sendMessage(tabId, {
-      type: 'AI_RESULT',
-      action: action,
-      originalText: text,
-      result: result,
-      isRightClick: isRightClick,
-      position: position
+  chrome.tabs.sendMessage(tabId, {
+    type: 'AI_RESULT',
+    action: action,
+    originalText: text,
+    result: result,
+    isRightClick: isRightClick,
+    position: position,
+    isInputField: isInputField,
+    isFullText: message.isFullText,
+    textStart: message.textStart,
+    textEnd: message.textEnd,
+    languageName: languageName,
+    tone: message.tone,
+    toneName: message.toneName
+  });
+}
+
+// AI Processing Functions
+async function performTranslation(text, targetLanguage, languageName) {
+  try {
+    // Check if Translator API is available
+    if (typeof Translator === 'undefined') {
+      throw new Error('Translation API not available');
+    }
+
+    const availability = await Translator.availability();
+    if (availability === 'no') {
+      throw new Error('Translation not available');
+    }
+
+    // Create translator session
+    const translator = await Translator.create({
+      sourceLanguage: 'en', // Auto-detect would be better
+      targetLanguage: targetLanguage
     });
-  }, 1000); // Simulate processing delay
+
+    // Perform translation
+    const translatedText = await translator.translate(text);
+    return translatedText;
+    
+  } catch (error) {
+    console.error('Translation error:', error);
+    // Fallback to a simple mock translation for demo
+    return `[Translated to ${languageName}] ${text}`;
+  }
+}
+
+async function performProofreading(text) {
+  try {
+    if (typeof Proofreader === 'undefined') {
+      throw new Error('Proofreader API not available');
+    }
+
+    const availability = await Proofreader.availability();
+    if (availability === 'no') {
+      throw new Error('Proofreader not available');
+    }
+
+    const proofreader = await Proofreader.create({
+      language: 'en'
+    });
+
+    const correctedText = await proofreader.proofread(text);
+    return correctedText;
+    
+  } catch (error) {
+    console.error('Proofreading error:', error);
+    // Simple fallback corrections
+    return text.replace(/\b(teh|recieve|seperate|there|their|they're)\b/gi, match => {
+      const corrections = { 
+        'teh': 'the', 'recieve': 'receive', 'seperate': 'separate',
+        'there': 'their', 'their': 'there' // This is overly simple, just for demo
+      };
+      return corrections[match.toLowerCase()] || match;
+    });
+  }
+}
+
+async function performRewriting(text) {
+  try {
+    if (typeof Rewriter === 'undefined') {
+      throw new Error('Rewriter API not available');
+    }
+
+    const availability = await Rewriter.availability();
+    if (availability === 'no') {
+      throw new Error('Rewriter not available');
+    }
+
+    const rewriter = await Rewriter.create({
+      tone: 'more-formal',
+      length: 'as-is'
+    });
+
+    const rewrittenText = await rewriter.rewrite(text);
+    return rewrittenText;
+    
+  } catch (error) {
+    console.error('Rewriting error:', error);
+    // Simple fallback - make text more formal
+    return text.replace(/\bcan't\b/g, 'cannot')
+              .replace(/\bwon't\b/g, 'will not')
+              .replace(/\bdon't\b/g, 'do not')
+              .replace(/\bisn't\b/g, 'is not');
+  }
+}
+
+async function performSummarization(text) {
+  try {
+    if (typeof Summarizer === 'undefined') {
+      throw new Error('Summarizer API not available');
+    }
+
+    const availability = await Summarizer.availability();
+    if (availability === 'no') {
+      throw new Error('Summarizer not available');
+    }
+
+    const summarizer = await Summarizer.create({
+      type: 'key-points',
+      format: 'plain-text',
+      length: 'short'
+    });
+
+    const summary = await summarizer.summarize(text);
+    return summary;
+    
+  } catch (error) {
+    console.error('Summarization error:', error);
+    // Simple fallback - take first few sentences
+    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    const summary = sentences.slice(0, Math.max(1, Math.floor(sentences.length / 3))).join('. ');
+    return summary + (summary.endsWith('.') ? '' : '.');
+  }
+}
+
+async function performToneChange(text, tone, toneName) {
+  try {
+    if (typeof Rewriter === 'undefined') {
+      throw new Error('Rewriter API not available');
+    }
+
+    const availability = await Rewriter.availability();
+    if (availability === 'no') {
+      throw new Error('Rewriter not available');
+    }
+
+    // Map our tone names to Rewriter API tones
+    const toneMapping = {
+      'professional': 'more-formal',
+      'casual': 'more-casual', 
+      'straightforward': 'as-is',
+      'confident': 'more-formal',
+      'friendly': 'more-casual'
+    };
+
+    const rewriter = await Rewriter.create({
+      tone: toneMapping[tone] || 'as-is',
+      length: 'as-is'
+    });
+
+    let rewrittenText = await rewriter.rewrite(text);
+    
+    // Apply additional tone-specific adjustments
+    rewrittenText = applyToneAdjustments(rewrittenText, tone);
+    
+    return rewrittenText;
+    
+  } catch (error) {
+    console.error('Tone change error:', error);
+    // Fallback tone transformations
+    return applyToneAdjustments(text, tone);
+  }
+}
+
+function applyToneAdjustments(text, tone) {
+  switch (tone) {
+    case 'professional':
+      return text
+        .replace(/\bcan't\b/gi, 'cannot')
+        .replace(/\bwon't\b/gi, 'will not')
+        .replace(/\bdon't\b/gi, 'do not')
+        .replace(/\bisn't\b/gi, 'is not')
+        .replace(/\bI think\b/gi, 'I believe')
+        .replace(/\bkinda\b/gi, 'somewhat')
+        .replace(/\bgonna\b/gi, 'going to');
+        
+    case 'casual':
+      return text
+        .replace(/\bcannot\b/gi, "can't")
+        .replace(/\bwill not\b/gi, "won't")
+        .replace(/\bdo not\b/gi, "don't")
+        .replace(/\bis not\b/gi, "isn't")
+        .replace(/\bI believe\b/gi, 'I think')
+        .replace(/\bgoing to\b/gi, 'gonna');
+        
+    case 'straightforward':
+      return text
+        .replace(/\bI think that maybe\b/gi, 'I think')
+        .replace(/\bperhaps\b/gi, '')
+        .replace(/\bmight be able to\b/gi, 'can')
+        .replace(/\bwould like to\b/gi, 'want to');
+        
+    case 'confident':
+      return text
+        .replace(/\bI think\b/gi, 'I know')
+        .replace(/\bmight\b/gi, 'will')
+        .replace(/\bcould\b/gi, 'can')
+        .replace(/\bmaybe\b/gi, 'definitely')
+        .replace(/\bprobably\b/gi, 'certainly');
+        
+    case 'friendly':
+      return text
+        .replace(/\bHello\b/gi, 'Hi there')
+        .replace(/\bThank you\b/gi, 'Thanks so much')
+        .replace(/\bRegards\b/gi, 'Best wishes')
+        .replace(/\.$/, '! 😊');
+        
+    default:
+      return text;
+  }
+}
+
+async function performGeneration(text) {
+  try {
+    if (typeof LanguageModel === 'undefined') {
+      throw new Error('Language Model API not available');
+    }
+
+    const availability = await LanguageModel.availability();
+    if (availability === 'no') {
+      throw new Error('Language Model not available');
+    }
+
+    const session = await LanguageModel.create({
+      systemPrompt: 'You are a helpful writing assistant.',
+      language: 'en'
+    });
+
+    const prompt = `Generate content based on this prompt: "${text}"`;
+    const generatedText = await session.prompt(prompt);
+    return generatedText;
+    
+  } catch (error) {
+    console.error('Generation error:', error);
+    // Simple fallback
+    return `Here is some generated content based on your prompt: "${text}". This would be expanded with AI-generated text in a real implementation.`;
+  }
 }

@@ -1,52 +1,427 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body {
-      width: 300px;
-      padding: 20px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    }
-    .header {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-    .status {
-      padding: 10px;
-      border-radius: 4px;
-      margin-bottom: 10px;
-    }
-    .status.success {
-      background-color: #d4edda;
-      color: #155724;
-    }
-    .status.warning {
-      background-color: #fff3cd;
-      color: #856404;
-    }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h2>AI Input Enhancer</h2>
-  </div>
-  
-  <div id="status" class="status">
-    Checking AI API availability...
-  </div>
-  
-  <div id="features">
-    <h3>Features:</h3>
-    <ul>
-      <li>Translation</li>
-      <li>Proofreading</li>
-      <li>Text Rewriting</li>
-      <li>Summarization</li>
-      <li>Content Generation</li>
-    </ul>
-  </div>
-  
-  <script src="popup.js"></script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        width: 380px;
+        min-height: 500px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        background: #f8f9fa;
+        color: #333;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #4285f4, #248fcc);
+        color: white;
+        padding: 20px;
+        text-align: center;
+        position: relative;
+      }
+
+      .header h1 {
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+
+      .header p {
+        font-size: 12px;
+        opacity: 0.9;
+      }
+
+      .status-indicator {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #34a853;
+        border: 2px solid white;
+      }
+
+      .status-indicator.warning {
+        background: #fbbc04;
+      }
+
+      .status-indicator.error {
+        background: #ea4335;
+      }
+
+      .content {
+        padding: 0;
+      }
+
+      .section {
+        background: white;
+        margin: 12px;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+      }
+
+      .section-header {
+        padding: 16px;
+        border-bottom: 1px solid #e8eaed;
+        font-weight: 600;
+        font-size: 14px;
+        color: #333;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .section-content {
+        padding: 16px;
+      }
+
+      .setting-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 0;
+        border-bottom: 1px solid #f0f0f0;
+      }
+
+      .setting-item:last-child {
+        border-bottom: none;
+      }
+
+      .setting-label {
+        font-size: 14px;
+        color: #333;
+      }
+
+      .setting-description {
+        font-size: 12px;
+        color: #666;
+        margin-top: 2px;
+      }
+
+      .toggle-switch {
+        position: relative;
+        width: 44px;
+        height: 24px;
+        background: #ccc;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: background 0.3s;
+      }
+
+      .toggle-switch.active {
+        background: #4285f4;
+      }
+
+      .toggle-switch::after {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 20px;
+        height: 20px;
+        background: white;
+        border-radius: 50%;
+        transition: transform 0.3s;
+      }
+
+      .toggle-switch.active::after {
+        transform: translateX(20px);
+      }
+
+      .language-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .language-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-size: 13px;
+      }
+
+      .language-item:hover {
+        background: #f8f9fa;
+        border-color: #4285f4;
+      }
+
+      .language-item.selected {
+        background: #e8f0fe;
+        border-color: #4285f4;
+        color: #1a73e8;
+      }
+
+      .language-checkbox {
+        width: 16px;
+        height: 16px;
+        border: 2px solid #ccc;
+        border-radius: 3px;
+        position: relative;
+        flex-shrink: 0;
+      }
+
+      .language-item.selected .language-checkbox {
+        background: #4285f4;
+        border-color: #4285f4;
+      }
+
+      .language-item.selected .language-checkbox::after {
+        content: "✓";
+        position: absolute;
+        top: -2px;
+        left: 2px;
+        color: white;
+        font-size: 12px;
+        font-weight: bold;
+      }
+
+      .add-language-btn {
+        width: 100%;
+        padding: 10px;
+        background: #f8f9fa;
+        border: 1px dashed #ccc;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        color: #666;
+        margin-top: 8px;
+        transition: all 0.2s;
+      }
+
+      .add-language-btn:hover {
+        background: #e8f0fe;
+        border-color: #4285f4;
+        color: #1a73e8;
+      }
+
+      .status-message {
+        padding: 12px;
+        margin: 12px;
+        border-radius: 6px;
+        font-size: 13px;
+        text-align: center;
+      }
+
+      .status-message.success {
+        background: #e6f4ea;
+        color: #137333;
+        border: 1px solid #ceead6;
+      }
+
+      .status-message.warning {
+        background: #fef7e0;
+        color: #b06000;
+        border: 1px solid #fdd663;
+      }
+
+      .status-message.error {
+        background: #fce8e6;
+        color: #d93025;
+        border: 1px solid #f28b82;
+      }
+
+      .footer {
+        padding: 16px;
+        text-align: center;
+        font-size: 11px;
+        color: #666;
+        border-top: 1px solid #e8eaed;
+        background: white;
+      }
+
+      .icon {
+        font-size: 16px;
+      }
+
+      .reset-btn {
+        background: none;
+        border: 1px solid #ea4335;
+        color: #ea4335;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        transition: all 0.2s;
+      }
+
+      .reset-btn:hover {
+        background: #ea4335;
+        color: white;
+      }
+
+      /* Tab Styles */
+      .tab-nav {
+        display: flex;
+        background: #f8f9fa;
+        border-radius: 8px;
+        margin: 12px;
+        padding: 4px;
+        gap: 4px;
+      }
+
+      .tab-btn {
+        flex: 1;
+        padding: 10px 16px;
+        background: transparent;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        color: #666;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+
+      .tab-btn:hover {
+        background: rgba(66, 133, 244, 0.1);
+        color: #4285f4;
+      }
+
+      .tab-btn.active {
+        background: white;
+        color: #4285f4;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+
+      .tab-content {
+        display: none;
+      }
+
+      .tab-content.active {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <div class="status-indicator" id="statusIndicator"></div>
+      <h1>AnyText</h1>
+      <p>Intelligent text tools for any input field</p>
+    </div>
+
+    <div id="statusMessage" class="status-message" style="display: none"></div>
+
+    <div class="content">
+      <!-- Tab Navigation -->
+      <div class="tab-nav">
+        <button class="tab-btn active" data-tab="features">
+          <span class="icon">🤖</span>
+          AI Features
+        </button>
+        <button class="tab-btn" data-tab="languages">
+          <span class="icon">🌐</span>
+          Languages
+        </button>
+      </div>
+
+      <!-- AI Features Tab -->
+      <div class="tab-content active" id="features-tab">
+        <div class="section">
+          <div class="section-header">
+            <span class="icon">🤖</span>
+            Context Menu
+          </div>
+          <div class="section-content">
+            <div class="setting-item">
+              <div>
+                <div class="setting-label">Translation</div>
+                <div class="setting-description">
+                  Translate text to different languages
+                </div>
+              </div>
+              <div class="toggle-switch active" data-feature="translate"></div>
+            </div>
+            <div class="setting-item">
+              <div>
+                <div class="setting-label">Change Tone</div>
+                <div class="setting-description">
+                  Adjust writing tone and style
+                </div>
+              </div>
+              <div class="toggle-switch active" data-feature="changeTone"></div>
+            </div>
+            <div class="setting-item">
+              <div>
+                <div class="setting-label">Proofreading</div>
+                <div class="setting-description">
+                  Fix grammar and spelling errors
+                </div>
+              </div>
+              <div class="toggle-switch active" data-feature="proofread"></div>
+            </div>
+            <div class="setting-item">
+              <div>
+                <div class="setting-label">Rewriting</div>
+                <div class="setting-description">
+                  Improve writing style and tone
+                </div>
+              </div>
+              <div class="toggle-switch active" data-feature="rewrite"></div>
+            </div>
+            <div class="setting-item">
+              <div>
+                <div class="setting-label">Summarization</div>
+                <div class="setting-description">Create concise summaries</div>
+              </div>
+              <div class="toggle-switch active" data-feature="summarize"></div>
+            </div>
+            <div class="setting-item">
+              <div>
+                <div class="setting-label">Content Generation</div>
+                <div class="setting-description">
+                  Generate new content from prompts
+                </div>
+              </div>
+              <div class="toggle-switch active" data-feature="generate"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Translation Languages Tab -->
+      <div class="tab-content" id="languages-tab">
+        <div class="section">
+          <div class="section-header">
+            <span class="icon">🌐</span>
+            Translation Languages
+            <button class="reset-btn" id="resetLanguages">Reset</button>
+          </div>
+          <div class="section-content">
+            <div class="language-grid" id="languageGrid">
+              <!-- Languages will be populated by JavaScript -->
+            </div>
+            <div class="add-language-btn" id="addLanguageBtn">
+              + Add More Languages
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div>Version 1.0.0 • Made with ❤️ for productivity</div>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
 </html>
