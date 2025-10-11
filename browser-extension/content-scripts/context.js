@@ -1527,8 +1527,15 @@ function updatePreviewContent(preview, result) {
     spinnerOverlay.remove();
   }
 
-  // Update the result text content while preserving the styling
-  previewContentDiv.innerHTML = escapeHtml(result);
+  // Get the request data to check if this is proofreading
+  const requestData = JSON.parse(preview.dataset.requestData || '{}');
+  
+  // Update the result text content with highlighting for proofreading
+  if (requestData.action === 'proofread') {
+    previewContentDiv.innerHTML = highlightProofreadingChanges(requestData.originalText, result);
+  } else {
+    previewContentDiv.innerHTML = escapeHtml(result);
+  }
   
   // Ensure the styling is preserved for future spinner overlays
   if (!previewContentDiv.style.position) {
