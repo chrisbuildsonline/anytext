@@ -67,9 +67,11 @@ class AIServiceManager {
         // Check if the model is available before trying to create it
         try {
           const availability = await LanguageModel.availability();
-          
+
           if (availability === "no") {
-            throw new Error("LanguageModel not available - download Gemini Nano model");
+            throw new Error(
+              "LanguageModel not available - download Gemini Nano model"
+            );
           }
         } catch (availError) {
           // Continue anyway, as availability check might fail but creation might work
@@ -81,12 +83,15 @@ class AIServiceManager {
         this.isInitialized = true;
       } catch (error) {
         // Check for specific error types
-        if (error.name === "NotAllowedError" && error.message.includes("crashed too many times")) {
+        if (
+          error.name === "NotAllowedError" &&
+          error.message.includes("crashed too many times")
+        ) {
           // Chrome AI model has crashed too many times and is disabled for this version
         } else if (error.name === "NotSupportedError") {
           // Chrome Built-in AI is not supported in this browser version
         }
-        
+
         this.isInitialized = false;
       }
 
@@ -219,13 +224,15 @@ class AIServiceManager {
 }
 
 // Test LanguageModel availability in service worker context
-if (typeof LanguageModel !== 'undefined') {
+if (typeof LanguageModel !== "undefined") {
   // Test availability check
-  LanguageModel.availability().then(availability => {
-    // LanguageModel is available
-  }).catch(error => {
-    // LanguageModel availability check failed
-  });
+  LanguageModel.availability()
+    .then((availability) => {
+      // LanguageModel is available
+    })
+    .catch((error) => {
+      // LanguageModel availability check failed
+    });
 }
 
 let userSettings = null;
@@ -255,8 +262,9 @@ async function loadSettings() {
         { code: "zh", name: "Chinese", flag: "🇨🇳" },
       ],
     };
+
   } catch (error) {
-    // Error loading settings, use defaults
+    console.error("Error loading settings:", error);
   }
 }
 
@@ -265,7 +273,6 @@ async function createContextMenus() {
 
   // Remove old menus to avoid duplicates
   chrome.contextMenus.removeAll(() => {
-
     // Only show menu when text is selected
     if (!hasSelection) return;
 
@@ -283,12 +290,13 @@ async function createContextMenus() {
       chrome.contextMenus.create({
         id: "ai-translate-parent",
         parentId: "ai-input-analyzer",
-        title: "🌐 Translate to...",
+        title: "Translate to...",
         contexts: ["selection"],
       });
 
       // Add language options
       if (userSettings.languages?.length) {
+
         userSettings.languages.forEach((language) => {
           chrome.contextMenus.create({
             id: `ai-translate-${language.code}`,
@@ -297,6 +305,8 @@ async function createContextMenus() {
             contexts: ["selection"],
           });
         });
+      } else {
+
       }
     }
 
@@ -304,7 +314,7 @@ async function createContextMenus() {
       chrome.contextMenus.create({
         id: "ai-proofread",
         parentId: "ai-input-analyzer",
-        title: "✏️ Proofread",
+        title: "Proofread",
         contexts: ["selection"],
       });
     }
@@ -313,7 +323,7 @@ async function createContextMenus() {
       chrome.contextMenus.create({
         id: "ai-rewrite",
         parentId: "ai-input-analyzer",
-        title: "📝 Rewrite",
+        title: "Rewrite",
         contexts: ["selection"],
       });
     }
@@ -322,7 +332,7 @@ async function createContextMenus() {
       chrome.contextMenus.create({
         id: "ai-summarize",
         parentId: "ai-input-analyzer",
-        title: "📄 Summarize",
+        title: "Summarize",
         contexts: ["selection"],
       });
     }
@@ -339,15 +349,31 @@ async function createContextMenus() {
     chrome.contextMenus.create({
       id: "ai-settings",
       parentId: "ai-input-analyzer",
-      title: "⚙️ Settings",
+      title: "Settings",
       contexts: ["selection"],
     });
   });
 }
 
 // Initialize
-chrome.runtime.onInstalled.addListener(createContextMenus);
-chrome.runtime.onStartup.addListener(createContextMenus);
+chrome.runtime.onInstalled.addListener(async () => {
+  await createContextMenus();
+  // Initialize AI service manager early
+  await initializeAI();
+});
+chrome.runtime.onStartup.addListener(async () => {
+  await createContextMenus();
+  // Initialize AI service manager early
+  await initializeAI();
+});
+
+// Listen for settings changes and update context menus
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === "sync" && changes.aiInputEnhancerSettings) {
+    // Settings changed, update context menus
+    createContextMenus();
+  }
+});
 
 // Handle messages from content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -410,7 +436,6 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 
 // Handle AI processing requests
 async function handleAIRequest(message, tabId) {
-
   const {
     action,
     text,
@@ -531,7 +556,6 @@ async function initializeAI() {
 
 // AI Processing Functions
 async function performTranslation(text, targetLanguage, languageName) {
-
   try {
     // Check if AI is permanently disabled
     if (aiPermanentlyDisabled) {
@@ -571,43 +595,17 @@ async function performTranslation(text, targetLanguage, languageName) {
 }
 
 async function getFallbackTranslation(text, targetLanguage, languageName) {
-  // Simple fallback translations for common phrases
-  const fallbackTranslations = {
-    es: {
-      hello: "hola",
-      goodbye: "adiós",
-      "thank you": "gracias",
-      please: "por favor",
-      yes: "sí",
-      no: "no",
-    },
-    fr: {
-      hello: "bonjour",
-      goodbye: "au revoir",
-      "thank you": "merci",
-      please: "s'il vous plaît",
-      yes: "oui",
-      no: "non",
-    },
-    de: {
-      hello: "hallo",
-      goodbye: "auf wiedersehen",
-      "thank you": "danke",
-      please: "bitte",
-      yes: "ja",
-      no: "nein",
-    },
-  };
-
-  const lowerText = text.toLowerCase().trim();
-  const translations = fallbackTranslations[targetLanguage];
-
-  if (translations && translations[lowerText]) {
-    return translations[lowerText];
-  }
-
-  // If no specific translation, return a helpful message
-  return `Translation to ${languageName} is currently unavailable. Chrome Built-in AI needs to be enabled in chrome://flags (search for "Prompt API for Gemini Nano").`;
+  // Show notification about AI unavailability and return original text
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs[0]) {
+      chrome.tabs.sendMessage(tabs[0].id, {
+        type: "SHOW_NOTIFICATION",
+        message: `AI translation to ${languageName} unavailable. Try again.`,
+        notificationType: "warning",
+      });
+    }
+  });
+  return text;
 }
 
 async function performProofreading(text) {
@@ -637,38 +635,18 @@ async function performProofreading(text) {
 }
 
 function getFallbackProofreading(text) {
-  let corrected = text;
-
-  // Common spelling corrections
-  const corrections = {
-    teh: "the",
-    recieve: "receive",
-    seperate: "separate",
-    occured: "occurred",
-    definately: "definitely",
-    thier: "their",
-    there: "their", // Context-dependent, but common mistake
-    your: "you're", // Context-dependent
-    its: "it's", // Context-dependent
-    loose: "lose", // Context-dependent
-    affect: "effect", // Context-dependent
-    then: "than", // Context-dependent
-  };
-
-  // Apply corrections
-  Object.entries(corrections).forEach(([wrong, right]) => {
-    const regex = new RegExp(`\\b${wrong}\\b`, "gi");
-    corrected = corrected.replace(regex, right);
+  // Show notification about AI unavailability and return original text
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs[0]) {
+      chrome.tabs.sendMessage(tabs[0].id, {
+        type: "SHOW_NOTIFICATION",
+        message:
+          "AI proofreading unavailable. Try again.",
+        notificationType: "warning",
+      });
+    }
   });
-
-  // Basic grammar fixes
-  corrected = corrected.replace(/\bi\b/g, "I"); // Capitalize standalone 'i'
-  corrected = corrected.replace(
-    /([.!?])\s*([a-z])/g,
-    (match, punct, letter) => punct + " " + letter.toUpperCase()
-  ); // Capitalize after punctuation
-
-  return corrected;
+  return text;
 }
 
 async function performRewriting(text) {
@@ -695,39 +673,18 @@ async function performRewriting(text) {
 }
 
 function getFallbackRewriting(text) {
-  let rewritten = text;
-
-  // Make text more formal and clear
-  const improvements = {
-    "can't": "cannot",
-    "won't": "will not",
-    "don't": "do not",
-    "isn't": "is not",
-    "aren't": "are not",
-    "wasn't": "was not",
-    "weren't": "were not",
-    "hasn't": "has not",
-    "haven't": "have not",
-    "hadn't": "had not",
-    "shouldn't": "should not",
-    "wouldn't": "would not",
-    "couldn't": "could not",
-    "mustn't": "must not",
-    gonna: "going to",
-    wanna: "want to",
-    gotta: "have to",
-    kinda: "somewhat",
-    sorta: "sort of",
-    "lots of": "many",
-    "a lot of": "many",
-  };
-
-  Object.entries(improvements).forEach(([informal, formal]) => {
-    const regex = new RegExp(`\\b${informal}\\b`, "gi");
-    rewritten = rewritten.replace(regex, formal);
+  // Show notification about AI unavailability and return original text
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs[0]) {
+      chrome.tabs.sendMessage(tabs[0].id, {
+        type: "SHOW_NOTIFICATION",
+        message:
+          "AI rewriting unavailable. Try again.",
+        notificationType: "warning",
+      });
+    }
   });
-
-  return rewritten;
+  return text;
 }
 
 async function performSummarization(text) {
@@ -754,24 +711,18 @@ async function performSummarization(text) {
 }
 
 function getFallbackSummarization(text) {
-  const sentences = text.split(/[.!?]+/).filter((s) => s.trim().length > 0);
-
-  if (sentences.length <= 2) {
-    return text; // Already short enough
-  }
-
-  // Take first sentence and last sentence for very basic summary
-  if (sentences.length <= 4) {
-    return sentences.slice(0, 2).join(". ") + ".";
-  }
-
-  // For longer text, take first, middle, and key sentences
-  const firstSentence = sentences[0];
-  const lastSentence = sentences[sentences.length - 1];
-  const middleIndex = Math.floor(sentences.length / 2);
-  const middleSentence = sentences[middleIndex];
-
-  return `${firstSentence}. ${middleSentence}. ${lastSentence}.`;
+  // Show notification about AI unavailability and return original text
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs[0]) {
+      chrome.tabs.sendMessage(tabs[0].id, {
+        type: "SHOW_NOTIFICATION",
+        message:
+          "AI summarization unavailable. Try again.",
+        notificationType: "warning",
+      });
+    }
+  });
+  return text;
 }
 
 async function performToneChange(text, tone, toneName) {
@@ -792,7 +743,8 @@ async function performToneChange(text, tone, toneName) {
         "Rewrite the following text in a casual, friendly, conversational tone. Return ONLY the rewritten text without any explanations or additional formatting:",
       straightforward:
         "Rewrite the following text to be direct, clear, and straightforward. Return ONLY the rewritten text without any explanations or additional formatting:",
-      confident: "Rewrite the following text in a confident, assertive tone. Return ONLY the rewritten text without any explanations or additional formatting:",
+      confident:
+        "Rewrite the following text in a confident, assertive tone. Return ONLY the rewritten text without any explanations or additional formatting:",
       friendly:
         "Rewrite the following text in a warm, friendly, and approachable tone. Return ONLY the rewritten text without any explanations or additional formatting:",
     };
@@ -816,117 +768,17 @@ async function performToneChange(text, tone, toneName) {
 }
 
 function getFallbackToneChange(text, tone) {
-  let transformed = text;
-
-  switch (tone) {
-    case "professional":
-      transformed = transformed
-        .replace(/\bcan't\b/gi, "cannot")
-        .replace(/\bwon't\b/gi, "will not")
-        .replace(/\bdon't\b/gi, "do not")
-        .replace(/\bisn't\b/gi, "is not")
-        .replace(/\bI think\b/gi, "I believe")
-        .replace(/\bkinda\b/gi, "somewhat")
-        .replace(/\bgonna\b/gi, "going to")
-        .replace(/\bwanna\b/gi, "want to")
-        .replace(/\byeah\b/gi, "yes")
-        .replace(/\bokay\b/gi, "acceptable");
-      break;
-
-    case "casual":
-      transformed = transformed
-        .replace(/\bcannot\b/gi, "can't")
-        .replace(/\bwill not\b/gi, "won't")
-        .replace(/\bdo not\b/gi, "don't")
-        .replace(/\bis not\b/gi, "isn't")
-        .replace(/\bI believe\b/gi, "I think")
-        .replace(/\bgoing to\b/gi, "gonna")
-        .replace(/\bwant to\b/gi, "wanna");
-      break;
-
-    case "straightforward":
-      transformed = transformed
-        .replace(/\bI think that maybe\b/gi, "I think")
-        .replace(/\bperhaps\b/gi, "")
-        .replace(/\bmight be able to\b/gi, "can")
-        .replace(/\bwould like to\b/gi, "want to")
-        .replace(/\bkind of\b/gi, "")
-        .replace(/\bsort of\b/gi, "");
-      break;
-
-    case "confident":
-      transformed = transformed
-        .replace(/\bI think\b/gi, "I know")
-        .replace(/\bmight\b/gi, "will")
-        .replace(/\bcould\b/gi, "can")
-        .replace(/\bmaybe\b/gi, "definitely")
-        .replace(/\bprobably\b/gi, "certainly")
-        .replace(/\bI guess\b/gi, "I believe");
-      break;
-
-    case "friendly":
-      transformed = transformed
-        .replace(/\bHello\b/gi, "Hi there")
-        .replace(/\bThank you\b/gi, "Thanks so much")
-        .replace(/\bRegards\b/gi, "Best wishes");
-      if (!transformed.match(/[!😊]$/)) {
-        transformed = transformed.replace(/\.$/, "! 😊");
-      }
-      break;
-
-    default:
-      return text;
-  }
-
-  return transformed;
-}
-
-function applyToneAdjustments(text, tone) {
-  switch (tone) {
-    case "professional":
-      return text
-        .replace(/\bcan't\b/gi, "cannot")
-        .replace(/\bwon't\b/gi, "will not")
-        .replace(/\bdon't\b/gi, "do not")
-        .replace(/\bisn't\b/gi, "is not")
-        .replace(/\bI think\b/gi, "I believe")
-        .replace(/\bkinda\b/gi, "somewhat")
-        .replace(/\bgonna\b/gi, "going to");
-
-    case "casual":
-      return text
-        .replace(/\bcannot\b/gi, "can't")
-        .replace(/\bwill not\b/gi, "won't")
-        .replace(/\bdo not\b/gi, "don't")
-        .replace(/\bis not\b/gi, "isn't")
-        .replace(/\bI believe\b/gi, "I think")
-        .replace(/\bgoing to\b/gi, "gonna");
-
-    case "straightforward":
-      return text
-        .replace(/\bI think that maybe\b/gi, "I think")
-        .replace(/\bperhaps\b/gi, "")
-        .replace(/\bmight be able to\b/gi, "can")
-        .replace(/\bwould like to\b/gi, "want to");
-
-    case "confident":
-      return text
-        .replace(/\bI think\b/gi, "I know")
-        .replace(/\bmight\b/gi, "will")
-        .replace(/\bcould\b/gi, "can")
-        .replace(/\bmaybe\b/gi, "definitely")
-        .replace(/\bprobably\b/gi, "certainly");
-
-    case "friendly":
-      return text
-        .replace(/\bHello\b/gi, "Hi there")
-        .replace(/\bThank you\b/gi, "Thanks so much")
-        .replace(/\bRegards\b/gi, "Best wishes")
-        .replace(/\.$/, "! 😊");
-
-    default:
-      return text;
-  }
+  // Show notification about AI unavailability and return original text
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs[0]) {
+      chrome.tabs.sendMessage(tabs[0].id, {
+        type: "SHOW_NOTIFICATION",
+        message: `AI tone change unavailable. Try again.`,
+        notificationType: "warning",
+      });
+    }
+  });
+  return text;
 }
 
 async function performGeneration(text) {
@@ -953,21 +805,16 @@ async function performGeneration(text) {
 }
 
 function getFallbackGeneration(text) {
-  const prompt = text.toLowerCase().trim();
-
-  // Simple template-based generation for common prompts
-  if (prompt.includes("email") || prompt.includes("message")) {
-    return `Subject: Regarding ${text}\n\nDear [Recipient],\n\nI hope this message finds you well. I wanted to reach out regarding ${text}.\n\nPlease let me know if you have any questions or if there's anything I can help with.\n\nBest regards,\n[Your Name]`;
-  }
-
-  if (prompt.includes("list") || prompt.includes("steps")) {
-    return `Here are some key points about ${text}:\n\n1. First consideration\n2. Important aspect to remember\n3. Next steps to take\n4. Final recommendations\n\nNote: AI generation is currently unavailable. Enable Chrome Built-in AI in chrome://flags for better results.`;
-  }
-
-  if (prompt.includes("summary") || prompt.includes("overview")) {
-    return `Overview of ${text}:\n\nThis topic involves several key components that are worth considering. The main aspects include the fundamental principles, practical applications, and potential outcomes.\n\nFor more detailed AI-generated content, please enable Chrome Built-in AI in chrome://flags.`;
-  }
-
-  // Generic fallback
-  return `Generated content for "${text}":\n\nThis is a basic template response. The topic you've mentioned is interesting and could be expanded upon in several ways. Consider the key aspects, potential applications, and relevant details.\n\nFor advanced AI generation, please enable Chrome Built-in AI in chrome://flags (search for "Prompt API for Gemini Nano").`;
+  // Show notification about AI unavailability and return original text
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs[0]) {
+      chrome.tabs.sendMessage(tabs[0].id, {
+        type: "SHOW_NOTIFICATION",
+        message:
+          "AI content generation unavailable. Try again.",
+        notificationType: "warning",
+      });
+    }
+  });
+  return text;
 }

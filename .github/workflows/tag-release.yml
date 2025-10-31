@@ -1,0 +1,104 @@
+name: Tagged Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  tagged-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: browser-extension/package-lock.json
+        
+    - name: Install dependencies
+      working-directory: browser-extension
+      run: npm ci
+      
+    - name: Build and package extension
+      working-directory: browser-extension
+      run: npm run zip
+      
+    - name: Get version from tag
+      id: version
+      run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      
+    - name: Create Tagged Release
+      uses: softprops/action-gh-release@v1
+      with:
+        name: "AnyText Extension ${{ github.ref_name }}"
+        body: |
+          ## AnyText Chrome Extension - Official Release
+          
+          **Version:** ${{ steps.version.outputs.version }}  
+          **Tag:** ${{ github.ref_name }}  
+          **Release Date:** ${{ github.event.head_commit.timestamp }}
+          
+          ### 🎉 What's New
+          This is an official tagged release of AnyText Chrome Extension.
+          
+          ### 🚀 Installation Instructions
+          1. Download `anytext-extension.zip` below
+          2. Extract the ZIP file
+          3. Open Chrome and go to `chrome://extensions/`
+          4. Enable "Developer mode" (top right)
+          5. Click "Load unpacked" and select the extracted folder
+          6. Enable Chrome Built-in AI in `chrome://flags`:
+             - Search for "**Prompt API for Gemini Nano**" → Enable
+             - Search for "**Gemini Nano**" → Enable
+             - Restart Chrome
+          
+          ### ✨ Core Features
+          - 🌍 **Universal Translation** - 80+ languages with context awareness
+          - 📝 **Smart Proofreading** - Grammar/spelling with visual diff highlighting
+          - 🎨 **Tone Adjustment** - Professional, casual, confident, straightforward styles
+          - 🔄 **Intelligent Rewriting** - Clarity and readability improvements
+          - 📄 **Text Summarization** - Condense long content into key points
+          - ✨ **Content Generation** - AI-powered text creation from prompts
+          
+          ### 🛠 Technical Highlights
+          - **Chrome Built-in AI APIs** - Powered by Gemini Nano
+          - **100% Offline Processing** - No external servers, complete privacy
+          - **Universal Web Integration** - Works on any website with text inputs
+          - **Right-Click Context Menu** - Instant access to AI features
+          - **Smart Input Detection** - Automatic AI button on text fields
+          - **Advanced Diff Visualization** - See exactly what AI changed
+          
+          ### 🎯 Use Cases
+          - **Email Writing** - Professional communication enhancement
+          - **Social Media** - Tone-appropriate posts and responses
+          - **Content Creation** - Blog posts, articles, and creative writing
+          - **International Communication** - Real-time translation support
+          - **Academic Writing** - Grammar correction and clarity improvement
+          - **Business Documents** - Professional formatting and tone
+          
+          ### 🔧 System Requirements
+          - **Chrome 127+** with Built-in AI APIs enabled
+          - **Gemini Nano model** (downloads automatically in supported regions)
+          - **Developer mode** enabled for unpacked extension loading
+          
+          ### 📚 Documentation
+          - Full documentation available in the repository README
+          - Interactive demo page included in extension
+          - Comprehensive feature testing available
+          
+          ---
+          
+          **🏆 Google Chrome AI Challenge 2025 Submission**
+          
+          *Transforming every text input on the web into an AI-powered writing assistant.*
+        files: |
+          browser-extension/anytext-extension.zip
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

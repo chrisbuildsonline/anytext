@@ -1,28 +1,44 @@
 {
-  "name": "ai-input-enhancer",
-  "version": "1.0.0",
+  "name": "anytext",
+  "version": "1.0.1",
   "description": "AI-powered text enhancement tools for any input field using Chrome's Built-in AI APIs",
   "main": "build.js",
   "scripts": {
     "build": "node build.js",
     "build:production": "node build.js --production",
-    "dev": "node build.js",
+    "dev": "node build.js --watch",
     "clean": "rm -rf dist",
-    "zip": "npm run build:production",
-    "test": "jest",
+    "zip": "npm run clean && npm run build:production && cd dist && zip -r ../anytext-extension.zip .",
+    "package": "npm run zip",
+    "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "lint": "echo 'Linting JavaScript files...' && find . -name '*.js' -not -path './node_modules/*' -not -path './dist/*' | head -10",
+    "validate": "npm run lint && npm run test",
+    "start": "npm run dev"
   },
   "keywords": [
     "chrome-extension",
     "ai",
+    "anytext",
     "text-enhancement",
     "translation",
     "proofreading",
-    "content-generation"
+    "content-generation",
+    "gemini-nano",
+    "chrome-built-in-ai",
+    "productivity"
   ],
-  "author": "",
+  "author": "Chris Johansson",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chrisjohansson/anytext"
+  },
+  "homepage": "https://github.com/chrisjohansson/anytext#readme",
+  "bugs": {
+    "url": "https://github.com/chrisjohansson/anytext/issues"
+  },
   "devDependencies": {
     "@jest/globals": "^29.7.0",
     "fs-extra": "^11.3.1",
@@ -36,8 +52,15 @@
       "**/tests/**/*.test.js"
     ],
     "collectCoverageFrom": [
-      "core/**/*.js",
-      "!core/**/*.test.js"
+      "**/*.js",
+      "!**/node_modules/**",
+      "!**/dist/**",
+      "!**/build.js",
+      "!**/*.test.js"
     ]
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
   }
 }

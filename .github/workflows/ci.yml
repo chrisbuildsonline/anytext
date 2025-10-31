@@ -1,0 +1,85 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: browser-extension/package-lock.json
+        
+    - name: Install dependencies
+      working-directory: browser-extension
+      run: npm ci
+      
+    - name: Run linting
+      working-directory: browser-extension
+      run: npm run lint
+      
+    - name: Run tests
+      working-directory: browser-extension
+      run: npm run test
+      
+    - name: Build extension
+      working-directory: browser-extension
+      run: npm run build
+      
+    - name: Validate manifest
+      working-directory: browser-extension
+      run: |
+        if [ ! -f "dist/manifest.json" ]; then
+          echo "❌ manifest.json not found in dist/"
+          exit 1
+        fi
+        echo "✅ manifest.json found"
+        
+    - name: Check required files
+      working-directory: browser-extension
+      run: |
+        REQUIRED_FILES=(
+          "dist/background.js"
+          "dist/popup.html"
+          "dist/popup.js"
+          "dist/content-scripts/context.js"
+          "dist/icons/icon-16.png"
+          "dist/icons/icon-48.png"
+          "dist/icons/icon-128.png"
+        )
+        
+        for file in "${REQUIRED_FILES[@]}"; do
+          if [ ! -f "$file" ]; then
+            echo "❌ Required file missing: $file"
+            exit 1
+          fi
+          echo "✅ Found: $file"
+        done
+        
+    - name: Test package creation
+      working-directory: browser-extension
+      run: |
+        npm run zip
+        if [ ! -f "anytext-extension.zip" ]; then
+          echo "❌ Extension ZIP not created"
+          exit 1
+        fi
+        echo "✅ Extension ZIP created successfully"
+        
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: extension-build-${{ github.sha }}
+        path: browser-extension/dist/
+        retention-days: 7

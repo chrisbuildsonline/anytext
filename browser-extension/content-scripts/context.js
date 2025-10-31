@@ -6,6 +6,7 @@ let currentButton = null;
 let currentDropdown = null;
 let currentSubmenu = null;
 let userSettings = null;
+let isPasting = false;
 
 // Initialize the script
 init();
@@ -34,6 +35,9 @@ async function init() {
         break;
       case "SETTINGS_UPDATED":
         handleSettingsUpdate(message.settings);
+        break;
+      case "SHOW_NOTIFICATION":
+        showNotification(message.message, message.notificationType);
         break;
     }
   });
@@ -101,6 +105,18 @@ function hasEnabledFeatures() {
   return Object.values(userSettings.features).some((enabled) => enabled);
 }
 
+function hasTextContent(input) {
+  if (!input) return false;
+
+  if (input.tagName === "INPUT" || input.tagName === "TEXTAREA") {
+    return input.value.trim().length > 0;
+  } else if (input.contentEditable === "true") {
+    return input.textContent.trim().length > 0;
+  }
+
+  return false;
+}
+
 // === Right-Click Context Menu ===
 function setupRightClickMenu() {
   // Store selected text for context menu actions
@@ -113,11 +129,36 @@ function setupRightClickMenu() {
 
     if (selectedText.length > 0) {
       lastSelectedText = selectedText;
-      // Store the position where the selection ended for popover placement
+
+      // Check if selection is inside an input field
+      const activeElement = document.activeElement;
+      const isInputField =
+        activeElement &&
+        (activeElement.tagName === "INPUT" ||
+          activeElement.tagName === "TEXTAREA" ||
+          activeElement.contentEditable === "true");
+
+      let positionX, positionY;
+
+      if (isInputField) {
+        // For input fields, position below the input element
+        const inputRect = activeElement.getBoundingClientRect();
+        positionX = inputRect.left + window.scrollX;
+        positionY = inputRect.bottom + window.scrollY + 5; // 5px below the input
+      } else {
+        // For regular text selection, position under the selected text
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        positionX = rect.left + window.scrollX;
+        positionY = rect.bottom + window.scrollY + 5; // 5px below the selection
+      }
+
       selectionPosition = {
-        x: e.clientX,
-        y: e.clientY,
+        x: positionX,
+        y: positionY,
         range: selection.getRangeAt(0).cloneRange(),
+        isInputField: isInputField,
+        inputElement: isInputField ? activeElement : null,
       };
 
       // Send selected text to background script for context menu setup
@@ -259,34 +300,130 @@ function setupInputField(input) {
   // Add event listeners
   input.addEventListener("focus", () => handleInputFocus(input));
   input.addEventListener("blur", () => handleInputBlur(input));
-  input.addEventListener("input", () => handleInputChange(input));
+  input.addEventListener("input", (e) => {
+    handleInputChange(input);
+    
+    // If this input event was caused by a paste, ensure we handle it
+    if (e.inputType === 'insertFromPaste' || e.inputType === 'insertCompositionText') {
+      // Additional check after a brief delay
+      setTimeout(() => handleInputChange(input), 20);
+    }
+  });
+  input.addEventListener("paste", (e) => {
+    // Handle paste events with multiple strategies
+    // Set pasting flag to prevent button hiding
+    isPasting = true;
+    
+    // Strategy 1: Multiple timeouts to catch different browser behaviors
+    setTimeout(() => {
+      handleInputChange(input);
+    }, 10);
+    
+    setTimeout(() => {
+      handleInputChange(input);
+    }, 50);
+    
+    setTimeout(() => {
+      handleInputChange(input);
+      // Clear pasting flag after paste is complete
+      isPasting = false;
+    }, 100);
+    
+    // Strategy 2: Use requestAnimationFrame for next render cycle
+    requestAnimationFrame(() => {
+      handleInputChange(input);
+    });
+  });
+  input.addEventListener("keydown", (e) => {
+    // Detect Ctrl+V specifically
+    if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+      // Set pasting flag to prevent button hiding
+      isPasting = true;
+      
+      // Handle paste with multiple strategies
+      setTimeout(() => {
+        handleInputChange(input);
+      }, 50);
+      setTimeout(() => {
+        handleInputChange(input);
+        // Clear pasting flag after paste is complete
+        isPasting = false;
+      }, 200);
+    }
+  });
+  
+  input.addEventListener("keyup", () => {
+    // Handle typing events to ensure button appears
+    handleInputChange(input);
+  });
+  
+  // Additional events for contenteditable elements
+  if (input.contentEditable === "true") {
+    input.addEventListener("DOMCharacterDataModified", () => handleInputChange(input));
+    input.addEventListener("DOMSubtreeModified", () => handleInputChange(input));
+  }
   input.addEventListener("selectionchange", () => handleSelectionChange(input));
 }
 
 function handleInputFocus(input) {
   currentActiveInput = input;
-  showContextButton(input);
+  // Only show button if input has text content
+  if (hasTextContent(input)) {
+    showContextButton(input);
+  }
 }
 
 function handleInputBlur(input) {
+  // Don't hide button if we're in the middle of a paste operation
+  if (isPasting) {
+    return;
+  }
+  
   // Delay hiding to allow clicking the button
   setTimeout(() => {
-    if (currentActiveInput === input && !isDropdownOpen()) {
-      hideContextButton();
-      currentActiveInput = null;
+    if (currentActiveInput === input && !isDropdownOpen() && !isPasting) {
+      // Check if the input still has focus (might have been a temporary blur)
+      if (document.activeElement !== input) {
+        hideContextButton();
+        currentActiveInput = null;
+      }
     }
   }, 150);
 }
 
 function handleInputChange(input) {
   if (currentActiveInput === input) {
-    updateButtonPosition(input);
+    // Check if we should show or hide the button based on text content
+    const hasText = hasTextContent(input);
+    
+    if (hasText) {
+      // Show button if it's not already shown and there's text
+      if (!currentButton) {
+        showContextButton(input);
+      } else {
+        updateButtonPosition(input);
+      }
+    } else {
+      // Hide button if there's no text
+      hideContextButton();
+    }
   }
 }
 
 function handleSelectionChange(input) {
   if (currentActiveInput === input) {
-    updateButtonPosition(input);
+    // Check if we should show or hide the button based on text content
+    if (hasTextContent(input)) {
+      // Show button if it's not already shown and there's text
+      if (!currentButton) {
+        showContextButton(input);
+      } else {
+        updateButtonPosition(input);
+      }
+    } else {
+      // Hide button if there's no text
+      hideContextButton();
+    }
   }
 }
 
@@ -295,6 +432,12 @@ function showContextButton(input) {
   // Check if any features are enabled
   if (!hasEnabledFeatures()) {
     return; // Don't show button if no features are enabled
+  }
+
+  // Check if input has text content
+  if (!hasTextContent(input)) {
+    hideContextButton();
+    return; // Don't show button if no text content
   }
 
   // Remove existing button
@@ -402,26 +545,31 @@ function showContextDropdown(button, input) {
   const actions = [
     {
       id: "translate",
-      label: "🌐 Translate",
+      label: "Translate",
       description: "Translate text",
       hasSubmenu: true,
     },
     {
       id: "changeTone",
-      label: "🎭 Change Tone",
+      label: "Change Tone",
       description: "Adjust writing tone",
       hasSubmenu: true,
     },
     {
       id: "proofread",
-      label: "✏️ Proofread",
+      label: "Proofread",
       description: "Fix grammar & spelling",
     },
     {
       id: "rewrite",
-      label: "📝 Rewrite",
+      label: "Rewrite",
       description: "Improve writing style",
-    }
+    },
+    {
+      id: "summarize",
+      label: "Summarize",
+      description: "Create a concise summary",
+    },
   ];
 
   // Filter enabled actions first
@@ -442,7 +590,7 @@ function showContextDropdown(button, input) {
     `;
 
     const arrow = action.hasSubmenu
-      ? '<span style="float: right; color: #666; margin-top: 2px;">▶</span>'
+      ? '<span style="float: right; color: #666; margin-top: 2px; font-size: 10px;">▶</span>'
       : "";
 
     item.innerHTML = `
@@ -1068,15 +1216,8 @@ function handleAIResult(message) {
 
   // Check if there's an existing preview showing loading state (from regeneration)
   const existingPreview = document.getElementById("anytext-result-preview");
-  console.log(
-    "AI Result received. Existing preview:",
-    !!existingPreview,
-    "Has originalContent:",
-    !!existingPreview?.dataset.originalContent
-  );
   if (existingPreview && existingPreview.dataset.originalContent) {
     // This is a regeneration response - just update the content
-    console.log("Updating existing preview with result:", result);
     updatePreviewContent(existingPreview, result);
     return;
   }
@@ -1197,16 +1338,6 @@ function showResultPreview(
     overflow: hidden;
   `;
 
-  // Action icons
-  const actionIcons = {
-    translate: "🌐",
-    changeTone: "🎭",
-    proofread: "✏️",
-    rewrite: "📝",
-    summarize: "📄",
-    generate: "✨",
-  };
-
   // Action names
   const actionNames = {
     translate: "Translation",
@@ -1221,9 +1352,8 @@ function showResultPreview(
   delete preview.dataset.originalContent;
 
   preview.innerHTML = `
-    <div style="padding: 7px 20px; background: linear-gradient(135deg, #4285f4, #2383ac); color: white; display: flex; align-items: center; justify-content: space-between;">
+    <div style="padding: 9px 20px;color: #4285f4;display: flex;align-items: center;justify-content: space-between;border-bottom: 1px solid #e3f6ff;background: #f9fcff;">
       <div style="display: flex; align-items: center; gap: 8px;">
-        <span style="font-size: 18px;">${actionIcons[action] || "🤖"}</span>
         <span style="font-weight: 600;">${actionNames[action] || action}</span>
       </div>
       <button id="dismiss-btn" style="background: none;border: none;color: white;width: 19px;height: 24px;border-radius: 46%;cursor: pointer;display: flex;align-items: center;padding: 0;justify-content: center;margin: 0;font-size: 16px;transition: background 0.2s;">×</button>
@@ -1233,16 +1363,24 @@ function showResultPreview(
       <div style="margin-bottom: 16px;">
         <div style="font-size: 12px; font-weight: 600; color: #666; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Preview</div>
         <div style="background: #f8f9fa; padding: 16px; border-radius: 8px;  line-height: 1.5; max-height: 200px; overflow-y: auto;">
-          ${escapeHtml(result)}
+          ${action === "proofread" ? highlightProofreadingChanges(originalText, result) : escapeHtml(result)}
         </div>
       </div>
       
       <div style="display: flex; gap: 8px; justify-content: space-between;">
-        <button id="regenerate-btn" style="background: #f8f9fa; color: #666; border: 1px solid #e0e0e0; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s; display: flex; align-items: center; gap: 4px;">🔄 Regenerate</button>
-        <div style="display: flex; gap: 8px;">
+        <button id="regenerate-btn" style="background: #f8f9fa; color: #666; border: 1px solid #e0e0e0; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s; display: flex; align-items: center; gap: 4px;">Regenerate</button>
+        ${
+          inputElement
+            ? `
+        <div style="display: flex; display: flex; gap: 5px;">
           <button id="insert-btn" style="background: #f8f9fa; color: #333; border: 1px solid #e0e0e0; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s;">Insert</button>
           <button id="replace-btn" style="background: #4285f4; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s;">Replace</button>
         </div>
+        `
+            : `
+        <button id="copy-btn" style="background: #4285f4; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s;">Copy</button>
+        `
+        }
       </div>
     </div>
   `;
@@ -1256,9 +1394,11 @@ function showResultPreview(
   const insertBtn = preview.querySelector("#insert-btn");
   const replaceBtn = preview.querySelector("#replace-btn");
   const regenerateBtn = preview.querySelector("#regenerate-btn");
+  const copyBtn = preview.querySelector("#copy-btn");
 
   dismissBtn.addEventListener("click", (e) => {
     e.stopPropagation();
+    e.preventDefault();
     hideResultPreview();
   });
 
@@ -1270,54 +1410,93 @@ function showResultPreview(
     dismissBtn.style.background = "rgba(255,255,255,0.2)";
   });
 
-  insertBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (inputElement) {
-      insertTextAtInput(result, inputElement, false);
-      showNotification("Text inserted!", "success");
-    } else {
-      // Copy to clipboard as fallback
-      navigator.clipboard.writeText(result).then(() => {
-        showNotification("Copied to clipboard!", "success");
-      });
-    }
-    hideResultPreview();
-  });
+  if (insertBtn) {
+    insertBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (inputElement) {
+        insertTextAtInput(result, inputElement, false);
+        showNotification("Text inserted!", "success");
+      } else {
+        // Copy to clipboard as fallback
+        navigator.clipboard.writeText(result).then(() => {
+          showNotification("Copied to clipboard!", "success");
+        });
+      }
+      hideResultPreview();
+    });
 
-  insertBtn.addEventListener("mouseenter", () => {
-    insertBtn.style.background = "#e8f0fe";
-    insertBtn.style.borderColor = "#4285f4";
-    insertBtn.style.color = "#4285f4";
-  });
+    insertBtn.addEventListener("mouseenter", () => {
+      insertBtn.style.background = "#e8f0fe";
+      insertBtn.style.borderColor = "#4285f4";
+      insertBtn.style.color = "#4285f4";
+    });
 
-  insertBtn.addEventListener("mouseleave", () => {
-    insertBtn.style.background = "#f8f9fa";
-    insertBtn.style.borderColor = "#e0e0e0";
-    insertBtn.style.color = "#333";
-  });
+    insertBtn.addEventListener("mouseleave", () => {
+      insertBtn.style.background = "#f8f9fa";
+      insertBtn.style.borderColor = "#e0e0e0";
+      insertBtn.style.color = "#333";
+    });
+  }
 
-  replaceBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (inputElement) {
-      replaceSelectedText(result, isFullText, textStart, textEnd);
-      const actionName = actionNames[action] || action;
-      showNotification(`${actionName} applied!`, "success");
-    } else {
-      // Copy to clipboard as fallback
-      navigator.clipboard.writeText(result).then(() => {
-        showNotification("Copied to clipboard!", "success");
-      });
-    }
-    hideResultPreview();
-  });
+  if (replaceBtn) {
+    replaceBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (inputElement) {
+        replaceSelectedText(
+          result,
+          isFullText,
+          textStart,
+          textEnd,
+          originalText,
+          action
+        );
+        const actionName = actionNames[action] || action;
+        if (action !== "proofread") {
+          showNotification(`${actionName} applied!`, "success");
+        }
+      } else {
+        // Copy to clipboard as fallback
+        navigator.clipboard.writeText(result).then(() => {
+          showNotification("Copied to clipboard!", "success");
+        });
+      }
+      hideResultPreview();
+    });
 
-  replaceBtn.addEventListener("mouseenter", () => {
-    replaceBtn.style.background = "#1a73e8";
-  });
+    replaceBtn.addEventListener("mouseenter", () => {
+      replaceBtn.style.background = "#1a73e8";
+    });
 
-  replaceBtn.addEventListener("mouseleave", () => {
-    replaceBtn.style.background = "#4285f4";
-  });
+    replaceBtn.addEventListener("mouseleave", () => {
+      replaceBtn.style.background = "#4285f4";
+    });
+  }
+
+  if (copyBtn) {
+    copyBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      navigator.clipboard
+        .writeText(result)
+        .then(() => {
+          showNotification("Copied to clipboard!", "success");
+        })
+        .catch(() => {
+          showNotification("Failed to copy", "error");
+        });
+      hideResultPreview();
+    });
+
+    copyBtn.addEventListener("mouseenter", () => {
+      copyBtn.style.background = "#1a73e8";
+    });
+
+    copyBtn.addEventListener("mouseleave", () => {
+      copyBtn.style.background = "#4285f4";
+    });
+  }
 
   // Store the original request data for regeneration (get from global state)
   if (!preview.dataset.requestData) {
@@ -1348,10 +1527,9 @@ function showResultPreview(
   regenerateBtn.addEventListener("click", (e) => {
     // Prevent the click from bubbling up and triggering outside click handler
     e.stopPropagation();
+    e.preventDefault();
 
-    console.log("Regenerate button clicked");
     const requestData = JSON.parse(preview.dataset.requestData);
-    console.log("Request data:", requestData);
 
     // Show loading state in the current preview instead of creating a new one
     showLoadingInPreview(
@@ -1381,7 +1559,6 @@ function showResultPreview(
       message.toneName = requestData.toneName || "Professional";
     }
 
-    console.log("Sending regenerate message:", message);
     chrome.runtime.sendMessage(message);
   });
 
@@ -1423,19 +1600,21 @@ function showResultPreview(
 }
 
 function showLoadingInPreview(preview, loadingText) {
-  console.log("showLoadingInPreview called with:", loadingText);
+
   // Find the preview content area (the div with the result text)
   // Try multiple selectors to find the content div
-  let previewContentDiv = preview.querySelector('div[style*="background: #f8f9fa"]') ||
-                          preview.querySelector('div[style*="background: rgb(248, 249, 250)"]') ||
-                          preview.querySelector('div[style*="padding: 16px"][style*="border-radius: 8px"]');
-  
+  let previewContentDiv =
+    preview.querySelector('div[style*="background: #f8f9fa"]') ||
+    preview.querySelector('div[style*="background: rgb(248, 249, 250)"]') ||
+    preview.querySelector(
+      'div[style*="padding: 16px"][style*="border-radius: 8px"]'
+    );
+
   if (!previewContentDiv) {
-    console.log("Could not find preview content div");
-    console.log("Available divs:", preview.querySelectorAll('div'));
+
     return;
   }
-  console.log("Found preview content div, adding spinner");
+
 
   // Store the original content if not already stored
   if (!preview.dataset.originalContent) {
@@ -1496,12 +1675,14 @@ function showLoadingInPreview(preview, loadingText) {
 }
 
 function updatePreviewContent(preview, result) {
-  console.log("updatePreviewContent called with result:", result);
   // Find the preview content div (the one with the result text)
   // Try multiple selectors to find the content div
-  let previewContentDiv = preview.querySelector('div[style*="background: #f8f9fa"]') ||
-                          preview.querySelector('div[style*="background: rgb(248, 249, 250)"]') ||
-                          preview.querySelector('div[style*="padding: 16px"][style*="border-radius: 8px"]');
+  let previewContentDiv =
+    preview.querySelector('div[style*="background: #f8f9fa"]') ||
+    preview.querySelector('div[style*="background: rgb(248, 249, 250)"]') ||
+    preview.querySelector(
+      'div[style*="padding: 16px"][style*="border-radius: 8px"]'
+    );
 
   // If not found, it might be because we added a spinner overlay, so look for the parent
   if (!previewContentDiv) {
@@ -1513,11 +1694,10 @@ function updatePreviewContent(preview, result) {
   }
 
   if (!previewContentDiv) {
-    console.log("Could not find preview content div for update");
-    console.log("Preview HTML:", preview.innerHTML);
+
     return;
   }
-  console.log("Found preview content div, updating content");
+
 
   // Remove spinner overlay if it exists
   const spinnerOverlay = previewContentDiv.querySelector(
@@ -1528,15 +1708,18 @@ function updatePreviewContent(preview, result) {
   }
 
   // Get the request data to check if this is proofreading
-  const requestData = JSON.parse(preview.dataset.requestData || '{}');
-  
+  const requestData = JSON.parse(preview.dataset.requestData || "{}");
+
   // Update the result text content with highlighting for proofreading
-  if (requestData.action === 'proofread') {
-    previewContentDiv.innerHTML = highlightProofreadingChanges(requestData.originalText, result);
+  if (requestData.action === "proofread") {
+    previewContentDiv.innerHTML = highlightProofreadingChanges(
+      requestData.originalText,
+      result
+    );
   } else {
     previewContentDiv.innerHTML = escapeHtml(result);
   }
-  
+
   // Ensure the styling is preserved for future spinner overlays
   if (!previewContentDiv.style.position) {
     previewContentDiv.style.position = "relative";
@@ -1552,6 +1735,114 @@ function updatePreviewContent(preview, result) {
 
   // Clear the loading state marker
   delete preview.dataset.originalContent;
+}
+
+function highlightProofreadingChanges(originalText, correctedText) {
+  // Add CSS for highlighting if not already added
+  if (!document.getElementById("anytext-proofreading-styles")) {
+    const style = document.createElement("style");
+    style.id = "anytext-proofreading-styles";
+    style.textContent = `
+      .anytext-corrected {
+        background: linear-gradient(to bottom, transparent 0%, transparent 85%, #34a853 85%, #34a853 100%);
+        text-decoration: none;
+        position: relative;
+        padding-bottom: 2px;
+        border-radius: 2px;
+      }
+      .anytext-corrected::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: #34a853;
+        border-radius: 1px;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // If texts are identical, return corrected text without highlighting
+  if (originalText.trim() === correctedText.trim()) {
+    return escapeHtml(correctedText);
+  }
+
+  // Simple word-based diff highlighting
+  const originalWords = originalText.split(/(\s+)/);
+  const correctedWords = correctedText.split(/(\s+)/);
+
+  let result = "";
+  let originalIndex = 0;
+
+  for (let i = 0; i < correctedWords.length; i++) {
+    const correctedWord = correctedWords[i];
+
+    // Handle whitespace
+    if (/^\s+$/.test(correctedWord)) {
+      result += escapeHtml(correctedWord);
+      continue;
+    }
+
+    // Find corresponding word in original text
+    let originalWord = "";
+    
+    // Skip whitespace in original to find next word
+    while (originalIndex < originalWords.length && /^\s+$/.test(originalWords[originalIndex])) {
+      originalIndex++;
+    }
+    
+    if (originalIndex < originalWords.length) {
+      originalWord = originalWords[originalIndex];
+      originalIndex++;
+    }
+
+    // Only highlight if there's a meaningful difference
+    const shouldHighlight = originalWord && 
+      correctedWord.trim() && 
+      originalWord.trim() &&
+      originalWord.toLowerCase().replace(/[^\w]/g, '') !== correctedWord.toLowerCase().replace(/[^\w]/g, '') &&
+      levenshteinDistance(originalWord.toLowerCase(), correctedWord.toLowerCase()) > 0 &&
+      levenshteinDistance(originalWord.toLowerCase(), correctedWord.toLowerCase()) <= Math.max(originalWord.length, correctedWord.length) * 0.6;
+
+    if (shouldHighlight) {
+      result += `<span class="anytext-corrected">${escapeHtml(correctedWord)}</span>`;
+    } else {
+      result += escapeHtml(correctedWord);
+    }
+  }
+
+  return result;
+}
+
+// Simple Levenshtein distance function for word similarity
+function levenshteinDistance(str1, str2) {
+  const matrix = [];
+
+  for (let i = 0; i <= str2.length; i++) {
+    matrix[i] = [i];
+  }
+
+  for (let j = 0; j <= str1.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= str2.length; i++) {
+    for (let j = 1; j <= str1.length; j++) {
+      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+
+  return matrix[str2.length][str1.length];
 }
 
 function showLoadingPreview(action, loadingText, inputElement, position) {
@@ -1574,20 +1865,10 @@ function showLoadingPreview(action, loadingText, inputElement, position) {
     overflow: hidden;
   `;
 
-  // Action icons
-  const actionIcons = {
-    translate: "🌐",
-    changeTone: "🎭",
-    proofread: "✏️",
-    rewrite: "📝",
-    summarize: "📄",
-    generate: "✨",
-  };
-
   preview.innerHTML = `
-    <div style="padding: 7px 20px; background: linear-gradient(135deg, #4285f4, #2383ac); color: white; display: flex; align-items: center; justify-content: space-between;">
+    <div style="padding: 9px 20px;color: #4285f4;display: flex;align-items: center;justify-content: space-between;border-bottom: 1px solid #e3f6ff;background: #f9fcff;">
       <div style="display: flex; align-items: center; gap: 12px;">
-        <div class="loading-spinner" style="width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top: 2px solid white; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+        <div class="loading-spinner" style="width: 16px; height: 16px; border: 2px solid rgba(66,133,244,0.2); border-top: 2px solid #4285f4; border-radius: 50%; animation: spin 1s linear infinite;"></div>
         <span style="font-size: 12px; font-weight: 600;">${loadingText}</span>
       </div>
       <button id="dismiss-btn" style="background: none;border: none;color: white;width: 19px;height: 24px;border-radius: 46%;cursor: pointer;display: flex;align-items: center;padding: 0;justify-content: center;margin: 0;font-size: 16px;transition: background 0.2s;">×</button>
@@ -1772,7 +2053,7 @@ function showResultPopover(action, originalText, result, position) {
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
   const popoverWidth = 350;
-  const popoverMaxHeight = 400;
+  const popoverMaxHeight = 550;
 
   popover.style.cssText = `
     position: fixed;
@@ -1838,7 +2119,7 @@ function showResultPopover(action, originalText, result, position) {
       </div>
       <div style="margin-bottom: 16px;">
         <label style="display: block; font-weight: 600; color: #666; margin-bottom: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">AI Result</label>
-        <div id="anytext-popover-result" style="background: #f0f8ff; padding: 12px; border-radius: 8px; font-size: 14px; line-height: 1.4; border-left: 3px solid #4285f4; max-height: 120px; overflow-y: auto;">${escapeHtml(
+        <div id="anytext-popover-result" style="background: #f0f8ff; padding: 12px; border-radius: 8px; font-size: 14px; line-height: 1.4; border-left: 3px solid #4285f4; max-height: 200px; overflow-y: auto;">${escapeHtml(
           result
         )}</div>
       </div>
@@ -1874,10 +2155,12 @@ function showResultPopover(action, originalText, result, position) {
   });
 
   insertBtn.addEventListener("click", () => {
-    insertTextAtCursor(result, position);
+    insertTextAtCursor(result, position, originalText, action);
     popover.style.animation = "slideOutDown 0.3s ease-in";
     setTimeout(() => popover.remove(), 300);
-    showNotification("Text inserted!", "success");
+    if (action !== "proofread") {
+      showNotification("Text inserted!", "success");
+    }
   });
 
   // Auto-close after 30 seconds
@@ -1901,7 +2184,12 @@ function showResultPopover(action, originalText, result, position) {
   }, 100);
 }
 
-function insertTextAtCursor(text, position) {
+function insertTextAtCursor(
+  text,
+  position,
+  originalText = null,
+  action = null
+) {
   if (position && position.range) {
     try {
       const selection = window.getSelection();
@@ -1911,8 +2199,35 @@ function insertTextAtCursor(text, position) {
       // Try to replace the selected text
       if (selection.rangeCount > 0) {
         const range = selection.getRangeAt(0);
+        const oldText = range.toString();
         range.deleteContents();
-        range.insertNode(document.createTextNode(text));
+
+        // For proofreading, insert highlighted content if in contenteditable
+        if (action === "proofread" && (originalText || oldText)) {
+          const parentElement =
+            range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+              ? range.commonAncestorContainer.parentElement
+              : range.commonAncestorContainer;
+
+          if (parentElement && parentElement.contentEditable === "true") {
+            // Create highlighted content for contenteditable elements
+            const fragment = document.createDocumentFragment();
+            const tempDiv = document.createElement("div");
+            tempDiv.innerHTML = highlightProofreadingChanges(
+              originalText || oldText,
+              text
+            );
+            while (tempDiv.firstChild) {
+              fragment.appendChild(tempDiv.firstChild);
+            }
+            range.insertNode(fragment);
+          } else {
+            // For non-contenteditable, just insert plain text
+            range.insertNode(document.createTextNode(text));
+          }
+        } else {
+          range.insertNode(document.createTextNode(text));
+        }
         selection.removeAllRanges();
       }
     } catch (error) {
@@ -1935,7 +2250,9 @@ function replaceSelectedText(
   newText,
   isFullText = false,
   textStart = null,
-  textEnd = null
+  textEnd = null,
+  originalText = null,
+  action = null
 ) {
   // Try to use the current active input first
   if (
@@ -1955,12 +2272,23 @@ function replaceSelectedText(
     }
 
     const value = currentActiveInput.value;
+    const oldText = value.substring(start, end);
+
     currentActiveInput.value =
       value.substring(0, start) + newText + value.substring(end);
     currentActiveInput.selectionStart = currentActiveInput.selectionEnd =
       start + newText.length;
     currentActiveInput.focus();
     currentActiveInput.dispatchEvent(new Event("input", { bubbles: true }));
+
+    // Show temporary highlighting overlay for proofreading
+    if (action === "proofread") {
+      showProofreadingOverlay(
+        currentActiveInput,
+        originalText || oldText,
+        newText
+      );
+    }
     return;
   }
 
@@ -1980,25 +2308,56 @@ function replaceSelectedText(
     }
 
     const value = activeElement.value;
+    const oldText = value.substring(start, end);
+
     activeElement.value =
       value.substring(0, start) + newText + value.substring(end);
     activeElement.selectionStart = activeElement.selectionEnd =
       start + newText.length;
     activeElement.focus();
     activeElement.dispatchEvent(new Event("input", { bubbles: true }));
+
+    // Show temporary highlighting overlay for proofreading
+    if (action === "proofread") {
+      showProofreadingOverlay(activeElement, originalText || oldText, newText);
+    }
   } else if (
     currentActiveInput &&
     currentActiveInput.contentEditable === "true"
   ) {
-    // Handle contenteditable elements
+    // Handle contenteditable elements with rich text support
     if (isFullText) {
-      currentActiveInput.textContent = newText;
+      if (action === "proofread" && originalText) {
+        // For contenteditable, we can use actual HTML highlighting
+        currentActiveInput.innerHTML = highlightProofreadingChanges(
+          originalText,
+          newText
+        );
+      } else {
+        currentActiveInput.textContent = newText;
+      }
     } else {
       const selection = window.getSelection();
       if (selection.rangeCount > 0) {
         const range = selection.getRangeAt(0);
+        const oldText = range.toString();
         range.deleteContents();
-        range.insertNode(document.createTextNode(newText));
+
+        if (action === "proofread" && (originalText || oldText)) {
+          // Create a document fragment with highlighted content
+          const fragment = document.createDocumentFragment();
+          const tempDiv = document.createElement("div");
+          tempDiv.innerHTML = highlightProofreadingChanges(
+            originalText || oldText,
+            newText
+          );
+          while (tempDiv.firstChild) {
+            fragment.appendChild(tempDiv.firstChild);
+          }
+          range.insertNode(fragment);
+        } else {
+          range.insertNode(document.createTextNode(newText));
+        }
         selection.removeAllRanges();
       }
     }
@@ -2012,6 +2371,96 @@ function replaceSelectedText(
       sel.removeAllRanges();
     }
   }
+}
+
+function showProofreadingOverlay(inputElement, originalText, correctedText) {
+  // Remove any existing overlay
+  const existingOverlay = document.getElementById(
+    "anytext-proofreading-overlay"
+  );
+  if (existingOverlay) {
+    existingOverlay.remove();
+  }
+
+  // Create overlay
+  const overlay = document.createElement("div");
+  overlay.id = "anytext-proofreading-overlay";
+
+  const inputRect = inputElement.getBoundingClientRect();
+  const scrollX = window.scrollX || document.documentElement.scrollLeft;
+  const scrollY = window.scrollY || document.documentElement.scrollTop;
+
+  overlay.style.cssText = `
+    position: absolute;
+    left: ${inputRect.left + scrollX}px;
+    top: ${inputRect.bottom + scrollY + 5}px;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    z-index: 2147483647;
+    max-width: ${Math.max(inputRect.width, 300)}px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    overflow: hidden;
+  `;
+
+  overlay.innerHTML = `
+    <div style="padding: 8px 12px; background: #f8f9fa; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: space-between;">
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <span style="color: #34a853; font-size: 16px;">✓</span>
+        <span style="font-size: 12px; font-weight: 600; color: #666;">Proofreading Applied</span>
+      </div>
+      <button id="close-overlay" style="background: none; border: none; color: #666; cursor: pointer; font-size: 14px; padding: 2px;">×</button>
+    </div>
+    <div style="padding: 12px;">
+      <div style="font-size: 12px; color: #666; margin-bottom: 6px;">Changes made:</div>
+      <div style="line-height: 1.4;">
+        ${highlightProofreadingChanges(originalText, correctedText)}
+      </div>
+    </div>
+  `;
+
+  // Position overlay to avoid going off-screen
+  document.body.appendChild(overlay);
+
+  const overlayRect = overlay.getBoundingClientRect();
+  if (overlayRect.right > window.innerWidth) {
+    overlay.style.left = `${window.innerWidth - overlayRect.width - 20}px`;
+  }
+  if (overlayRect.bottom > window.innerHeight) {
+    overlay.style.top = `${inputRect.top + scrollY - overlayRect.height - 5}px`;
+  }
+
+  // Add close button functionality
+  const closeBtn = overlay.querySelector("#close-overlay");
+  closeBtn.addEventListener("click", () => {
+    overlay.remove();
+  });
+
+  // Auto-hide after 4 seconds
+  setTimeout(() => {
+    if (overlay.parentNode) {
+      overlay.style.opacity = "0";
+      overlay.style.transition = "opacity 0.3s ease";
+      setTimeout(() => {
+        if (overlay.parentNode) {
+          overlay.remove();
+        }
+      }, 300);
+    }
+  }, 4000);
+
+  // Hide on click outside
+  setTimeout(() => {
+    const handleOutsideClick = (e) => {
+      if (!overlay.contains(e.target)) {
+        overlay.remove();
+        document.removeEventListener("click", handleOutsideClick);
+      }
+    };
+    document.addEventListener("click", handleOutsideClick);
+  }, 100);
 }
 
 function showNotification(message, type = "info") {

@@ -4,6 +4,7 @@ const { minify } = require("terser");
 
 const args = process.argv.slice(2);
 const isProduction = args.includes("--production");
+const isWatch = args.includes("--watch");
 
 const srcDir = "./";
 const distDir = "./dist";
@@ -13,18 +14,7 @@ const jsFiles = [
   "background.js",
   "popup.js",
   "content-scripts/main.js",
-  "content-scripts/context.js",
-  "content-scripts/input-button.js",
-  "core/ai-service-manager.js",
-  "core/input-field-detector.js",
-  "core/toolbar-manager.js",
-  "core/state-manager.js",
-  "ui/ai-toolbar.js",
-  "ui/translate-button.js",
-  "ui/proofread-button.js",
-  "ui/rewrite-button.js",
-  "ui/summarize-button.js",
-  "ui/generate-button.js"
+  "content-scripts/context.js"
 ];
 
 // Files to copy as-is
@@ -35,7 +25,9 @@ const staticFiles = [
   "icons/icon-16.png",
   "icons/icon-32.png", 
   "icons/icon-48.png",
-  "icons/icon-128.png"
+  "icons/icon-128.png",
+  "icons/icon-large.png",
+  "icons/logo.png"
 ];
 
 async function processJavaScript(filePath) {
@@ -81,7 +73,7 @@ async function processJavaScript(filePath) {
 }
 
 async function build() {
-  console.log("🏗️  Building AI Input Enhancer Extension...");
+  console.log("🏗️  Building AnyText Extension...");
 
   // Clean dist directory
   await fs.remove(distDir);
@@ -130,10 +122,10 @@ async function build() {
   if (isProduction) {
     const { execSync } = require("child_process");
     try {
-      execSync(`cd dist && zip -r ../ai-input-enhancer.zip .`, {
+      execSync(`cd dist && zip -r ../anytext-extension.zip .`, {
         stdio: "inherit",
       });
-      console.log("📦 Created production ZIP file");
+      console.log("📦 Created production ZIP file: anytext-extension.zip");
     } catch (error) {
       console.log("⚠️  Could not create ZIP (install zip command)");
     }
@@ -142,4 +134,37 @@ async function build() {
   console.log(`🎉 Build complete! Output in: ${distDir}`);
 }
 
-build().catch(console.error);
+// Watch mode for development
+if (isWatch) {
+  console.log("👀 Watching for changes...");
+  
+  const chokidar = require("fs").watch || null;
+  if (chokidar) {
+    // Simple file watching - rebuild on any change
+    const watchFiles = [...jsFiles, ...staticFiles];
+    let timeout;
+    
+    watchFiles.forEach(file => {
+      const fullPath = path.join(srcDir, file);
+      try {
+        fs.watch(fullPath, () => {
+          clearTimeout(timeout);
+          timeout = setTimeout(() => {
+            console.log(`🔄 File changed: ${file}`);
+            build().catch(console.error);
+          }, 100);
+        });
+      } catch (error) {
+        // File doesn't exist, skip watching
+      }
+    });
+    
+    // Initial build
+    build().catch(console.error);
+  } else {
+    console.log("⚠️  Watch mode not available, running single build");
+    build().catch(console.error);
+  }
+} else {
+  build().catch(console.error);
+}

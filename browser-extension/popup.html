@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AnyText - AI Text Enhancement</title>
     <style>
       * {
         margin: 0;
@@ -20,22 +21,27 @@
       }
 
       .header {
-        background: linear-gradient(135deg, #4285f4, #248fcc);
+        background: linear-gradient(135deg, #4285f4, #1a73e8);
         color: white;
-        padding: 20px;
+        padding: 24px 20px;
         text-align: center;
         position: relative;
+        box-shadow: 0 2px 8px rgba(66, 133, 244, 0.2);
       }
 
       .header h1 {
-        font-size: 18px;
-        font-weight: 600;
-        margin-bottom: 4px;
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 6px;
+        letter-spacing: -0.5px;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
       }
 
       .header p {
-        font-size: 12px;
-        opacity: 0.9;
+        font-size: 13px;
+        opacity: 0.95;
+        font-weight: 400;
+        letter-spacing: 0.2px;
       }
 
       .status-indicator {
@@ -219,7 +225,6 @@
       }
 
       .status-message.success {
-        background: #e6f4ea;
         color: #137333;
         border: 1px solid #ceead6;
       }
@@ -310,13 +315,76 @@
       .tab-content.active {
         display: block;
       }
+
+      /* Footer visibility - only show on About tab */
+      .footer {
+        display: none;
+      }
+
+      .footer.show {
+        display: block;
+      }
+
+      /* About tab styles */
+      .about-section {
+        margin-bottom: 16px;
+      }
+
+      .about-section h3 {
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #333;
+      }
+
+      .about-section p {
+        font-size: 13px;
+        line-height: 1.4;
+        color: #666;
+        margin-bottom: 12px;
+      }
+
+      .about-section ul,
+      .about-section ol {
+        font-size: 13px;
+        line-height: 1.4;
+        color: #666;
+        margin-left: 16px;
+      }
+
+      .about-section li {
+        margin-bottom: 4px;
+      }
+
+      .about-section code {
+        background: #f1f3f4;
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
+        font-size: 12px;
+      }
+
+      .demo-button {
+        background: #4285f4;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+
+      .demo-button:hover {
+        background: #3367d6;
+      }
     </style>
   </head>
   <body>
     <div class="header">
       <div class="status-indicator" id="statusIndicator"></div>
       <h1>AnyText</h1>
-      <p>Intelligent text tools for any input field</p>
     </div>
 
     <div id="statusMessage" class="status-message" style="display: none"></div>
@@ -324,23 +392,15 @@
     <div class="content">
       <!-- Tab Navigation -->
       <div class="tab-nav">
-        <button class="tab-btn active" data-tab="features">
-          <span class="icon">🤖</span>
-          AI Features
-        </button>
-        <button class="tab-btn" data-tab="languages">
-          <span class="icon">🌐</span>
-          Languages
-        </button>
+        <button class="tab-btn active" data-tab="features">AI Features</button>
+        <button class="tab-btn" data-tab="languages">Languages</button>
+        <button class="tab-btn" data-tab="about">About</button>
       </div>
 
       <!-- AI Features Tab -->
       <div class="tab-content active" id="features-tab">
         <div class="section">
-          <div class="section-header">
-            <span class="icon">🤖</span>
-            Context Menu
-          </div>
+          <div class="section-header">Context Menu</div>
           <div class="section-content">
             <div class="setting-item">
               <div>
@@ -402,7 +462,6 @@
       <div class="tab-content" id="languages-tab">
         <div class="section">
           <div class="section-header">
-            <span class="icon">🌐</span>
             Translation Languages
             <button class="reset-btn" id="resetLanguages">Reset</button>
           </div>
@@ -412,6 +471,86 @@
             </div>
             <div class="add-language-btn" id="addLanguageBtn">
               + Add More Languages
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- About Tab -->
+      <div class="tab-content" id="about-tab">
+        <div class="section">
+          <div class="section-header">What is AnyText?</div>
+          <div class="section-content">
+            <div style="margin-bottom: 16px">
+              <p
+                style="
+                  font-size: 13px;
+                  line-height: 1.4;
+                  color: #666;
+                  margin-bottom: 12px;
+                "
+              >
+                AnyText is an AI-powered browser extension that enhances any
+                text input field with intelligent writing tools. Right-click on
+                selected text to access powerful AI features.
+              </p>
+            </div>
+
+            <div style="margin-bottom: 16px">
+              <h3
+                style="
+                  font-size: 14px;
+                  font-weight: 600;
+                  margin-bottom: 8px;
+                  color: #333;
+                "
+              >
+                How to Use
+              </h3>
+              <ol
+                style="
+                  font-size: 13px;
+                  line-height: 1.4;
+                  color: #666;
+                  margin-left: 16px;
+                "
+              >
+                <li style="margin-bottom: 4px">
+                  Select any text on a webpage or the icon inside a input field
+                </li>
+                <li style="margin-bottom: 4px">
+                  Right-click to open the context menu
+                </li>
+                <li style="margin-bottom: 4px">
+                  Choose "AnyText" and select your desired action
+                </li>
+                <li style="margin-bottom: 4px">
+                  The AI-enhanced text will replace your selection
+                </li>
+              </ol>
+            </div>
+
+            <div style="margin-bottom: 16px">
+              <h3
+                style="
+                  font-size: 14px;
+                  font-weight: 600;
+                  margin-bottom: 8px;
+                  color: #333;
+                "
+              >
+                Requirements
+              </h3>
+              <p
+                style="
+                  font-size: 13px;
+                  line-height: 1.4;
+                  color: #666;
+                  margin-bottom: 8px;
+                "
+              >
+                AnyText uses Chrome's Built-in AI APIs.
+              </p>
             </div>
           </div>
         </div>

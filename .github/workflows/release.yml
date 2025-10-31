@@ -1,0 +1,120 @@
+name: Create Release
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: browser-extension/package-lock.json
+        
+    - name: Install dependencies
+      working-directory: browser-extension
+      run: npm ci
+      
+    - name: Build and package extension
+      working-directory: browser-extension
+      run: npm run zip
+      
+    - name: Get version from package.json
+      id: version
+      working-directory: browser-extension
+      run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+      
+    - name: Get commit SHA (short)
+      id: commit
+      run: echo "sha=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+      
+    - name: Create release tag
+      id: tag
+      run: |
+        TAG="v${{ steps.version.outputs.version }}-${{ steps.commit.outputs.sha }}"
+        echo "tag=$TAG" >> $GITHUB_OUTPUT
+        
+    - name: Check if release exists
+      id: check_release
+      run: |
+        if gh release view "${{ steps.tag.outputs.tag }}" >/dev/null 2>&1; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Delete existing release if it exists
+      if: steps.check_release.outputs.exists == 'true'
+      run: |
+        gh release delete "${{ steps.tag.outputs.tag }}" --yes
+        git push --delete origin "${{ steps.tag.outputs.tag }}" || true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.tag.outputs.tag }}
+        name: "AnyText Extension v${{ steps.version.outputs.version }} (${{ steps.commit.outputs.sha }})"
+        body: |
+          ## AnyText Chrome Extension Release
+          
+          **Version:** ${{ steps.version.outputs.version }}  
+          **Commit:** ${{ steps.commit.outputs.sha }}  
+          **Built:** ${{ github.event.head_commit.timestamp }}
+          
+          ### 🚀 Installation Instructions
+          1. Download `anytext-extension.zip` below
+          2. Extract the ZIP file
+          3. Open Chrome and go to `chrome://extensions/`
+          4. Enable "Developer mode" (top right)
+          5. Click "Load unpacked" and select the extracted folder
+          6. Enable Chrome Built-in AI in `chrome://flags` (search for "Prompt API for Gemini Nano")
+          
+          ### ✨ Features
+          - 🌍 **Translation** - 80+ languages supported
+          - 📝 **Proofreading** - Grammar and spelling correction with diff highlighting
+          - 🎨 **Tone Adjustment** - Professional, casual, confident, straightforward
+          - 🔄 **Rewriting** - Improve clarity and readability
+          - 📄 **Summarization** - Condense long content
+          - ✨ **Content Generation** - AI-powered text creation
+          
+          ### 🛠 Technical Details
+          - Uses Chrome's Built-in AI APIs (Gemini Nano)
+          - 100% offline processing - no external servers
+          - Works on any website with text inputs
+          - Right-click context menu integration
+          - Smart input field detection
+          
+          ### 📋 Changelog
+          ${{ github.event.head_commit.message }}
+          
+          ---
+          
+          **🏆 Google Chrome AI Challenge 2025 Submission**
+          
+          Built with Chrome's Built-in AI APIs for universal text enhancement across the web.
+        files: |
+          browser-extension/anytext-extension.zip
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: anytext-extension-${{ steps.version.outputs.version }}-${{ steps.commit.outputs.sha }}
+        path: browser-extension/anytext-extension.zip
+        retention-days: 90

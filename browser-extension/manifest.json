@@ -35,7 +35,8 @@
       "icons/icon-48.png",
       "icons/icon-128.png",
       "styles/*.css",
-      "ui/*.js"
+      "ui/*.js",
+      ".tests/test-page.html"
     ],
     "matches": ["<all_urls>"]
   }
