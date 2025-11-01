@@ -77,6 +77,26 @@ jobs:
         fi
         echo "✅ Extension ZIP created successfully"
         
+        # Verify ZIP contains dist folder contents (not source)
+        echo "📦 Verifying ZIP structure..."
+        unzip -l anytext-extension.zip
+        
+        # Check that manifest.json is in the root (not in a subfolder)
+        if unzip -l anytext-extension.zip | grep -q "^.*manifest.json$"; then
+          echo "✅ Correct ZIP structure - manifest.json in root"
+        else
+          echo "❌ Incorrect ZIP structure - manifest.json not in root"
+          exit 1
+        fi
+        
+        # Verify it's the built extension (not source files)
+        if unzip -l anytext-extension.zip | grep -q "package.json"; then
+          echo "❌ ZIP contains source files (package.json found)"
+          exit 1
+        else
+          echo "✅ ZIP contains only built extension files"
+        fi
+        
     - name: Upload build artifact
       uses: actions/upload-artifact@v4
       with:

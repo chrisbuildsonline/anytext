@@ -4,7 +4,15 @@ on:
   push:
     branches: [ main, master ]
   workflow_dispatch:
+  
+# Allow manual triggering for testing
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
 
+permissions:
+  contents: write
+  
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -28,6 +36,29 @@ jobs:
       working-directory: browser-extension
       run: npm run zip
       
+    - name: Verify extension package
+      working-directory: browser-extension
+      run: |
+        echo "📦 Verifying extension package..."
+        if [ -f "anytext-extension.zip" ]; then
+          echo "✅ Extension ZIP created"
+          ls -la anytext-extension.zip
+          echo ""
+          echo "📋 ZIP Contents:"
+          unzip -l anytext-extension.zip | head -20
+          
+          # Verify manifest.json is in root
+          if unzip -l anytext-extension.zip | grep -q "^.*manifest.json$"; then
+            echo "✅ manifest.json found in ZIP root - ready for Chrome installation"
+          else
+            echo "❌ manifest.json not in ZIP root"
+            exit 1
+          fi
+        else
+          echo "❌ Extension ZIP not found"
+          exit 1
+        fi
+      
     - name: Get version from package.json
       id: version
       working-directory: browser-extension
@@ -40,75 +71,25 @@ jobs:
     - name: Create release tag
       id: tag
       run: |
-        TAG="v${{ steps.version.outputs.version }}-${{ steps.commit.outputs.sha }}"
+        TAG="v${{ steps.version.outputs.version }}-build-${{ github.run_number }}"
         echo "tag=$TAG" >> $GITHUB_OUTPUT
         
-    - name: Check if release exists
-      id: check_release
-      run: |
-        if gh release view "${{ steps.tag.outputs.tag }}" >/dev/null 2>&1; then
-          echo "exists=true" >> $GITHUB_OUTPUT
-        else
-          echo "exists=false" >> $GITHUB_OUTPUT
-        fi
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: Delete existing release if it exists
-      if: steps.check_release.outputs.exists == 'true'
-      run: |
-        gh release delete "${{ steps.tag.outputs.tag }}" --yes
-        git push --delete origin "${{ steps.tag.outputs.tag }}" || true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        
     - name: Create Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ steps.tag.outputs.tag }}
-        name: "AnyText Extension v${{ steps.version.outputs.version }} (${{ steps.commit.outputs.sha }})"
+        name: "AnyText Extension v${{ steps.version.outputs.version }} - Build ${{ github.run_number }}"
         body: |
-          ## AnyText Chrome Extension Release
+          ## AnyText Chrome Extension - Automated Release
           
           **Version:** ${{ steps.version.outputs.version }}  
+          **Build:** ${{ github.run_number }}  
           **Commit:** ${{ steps.commit.outputs.sha }}  
-          **Built:** ${{ github.event.head_commit.timestamp }}
+          **Date:** ${{ github.event.head_commit.timestamp }}
           
-          ### 🚀 Installation Instructions
-          1. Download `anytext-extension.zip` below
-          2. Extract the ZIP file
-          3. Open Chrome and go to `chrome://extensions/`
-          4. Enable "Developer mode" (top right)
-          5. Click "Load unpacked" and select the extracted folder
-          6. Enable Chrome Built-in AI in `chrome://flags` (search for "Prompt API for Gemini Nano")
-          
-          ### ✨ Features
-          - 🌍 **Translation** - 80+ languages supported
-          - 📝 **Proofreading** - Grammar and spelling correction with diff highlighting
-          - 🎨 **Tone Adjustment** - Professional, casual, confident, straightforward
-          - 🔄 **Rewriting** - Improve clarity and readability
-          - 📄 **Summarization** - Condense long content
-          - ✨ **Content Generation** - AI-powered text creation
-          
-          ### 🛠 Technical Details
-          - Uses Chrome's Built-in AI APIs (Gemini Nano)
-          - 100% offline processing - no external servers
-          - Works on any website with text inputs
-          - Right-click context menu integration
-          - Smart input field detection
-          
-          ### 📋 Changelog
-          ${{ github.event.head_commit.message }}
-          
-          ---
-          
-          **🏆 Google Chrome AI Challenge 2025 Submission**
-          
-          Built with Chrome's Built-in AI APIs for universal text enhancement across the web.
-        files: |
-          browser-extension/anytext-extension.zip
-        draft: false
-        prerelease: false
+          **Commit:** ${{ github.event.head_commit.message }}
+        files: browser-extension/anytext-extension.zip
+        make_latest: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         

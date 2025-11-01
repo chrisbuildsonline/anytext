@@ -1,0 +1,93 @@
+name: Test Release Creation
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/**'
+
+permissions:
+  contents: write
+
+jobs:
+  test-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: browser-extension/package-lock.json
+        
+    - name: Install dependencies
+      working-directory: browser-extension
+      run: npm ci
+      
+    - name: Build and package extension
+      working-directory: browser-extension
+      run: npm run zip
+      
+    - name: Verify ZIP exists and contents
+      run: |
+        if [ -f "browser-extension/anytext-extension.zip" ]; then
+          echo "✅ ZIP file created successfully"
+          ls -la browser-extension/anytext-extension.zip
+          echo ""
+          echo "📦 ZIP Contents:"
+          unzip -l browser-extension/anytext-extension.zip
+          echo ""
+          echo "🔍 Verifying required extension files..."
+          unzip -t browser-extension/anytext-extension.zip
+          
+          # Check if manifest.json is in the root of the ZIP
+          if unzip -l browser-extension/anytext-extension.zip | grep -q "manifest.json"; then
+            echo "✅ manifest.json found in ZIP root"
+          else
+            echo "❌ manifest.json not found in ZIP root"
+            exit 1
+          fi
+        else
+          echo "❌ ZIP file not found"
+          exit 1
+        fi
+        
+    - name: Get version and create tag
+      id: release_info
+      working-directory: browser-extension
+      run: |
+        VERSION=$(node -p "require('./package.json').version")
+        TAG="test-v${VERSION}-$(date +%s)"
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "tag=$TAG" >> $GITHUB_OUTPUT
+        
+    - name: Create Test Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.release_info.outputs.tag }}
+        name: "🧪 Test Release - AnyText v${{ steps.release_info.outputs.version }}"
+        body: |
+          ## 🧪 Test Release - AnyText Chrome Extension
+          
+          This is a test release to verify the automated release system.
+          
+          **Version:** ${{ steps.release_info.outputs.version }}  
+          **Test Tag:** ${{ steps.release_info.outputs.tag }}  
+          **Workflow:** Test Release Creation
+          
+          ### Installation
+          1. Download `anytext-extension.zip`
+          2. Extract and load in Chrome
+          3. Enable Chrome Built-in AI in flags
+          
+          ---
+          
+          **Note:** This is a test release. Use tagged releases for production.
+        files: browser-extension/anytext-extension.zip
+        prerelease: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
