@@ -2,54 +2,45 @@
 
 **🏆 Google Chrome AI Challenge 2025 Submission**
 
-AnyText is a Chrome browser extension that transforms any text input field on the web into an AI-powered writing assistant. Using Chrome's Built-in AI APIs (Gemini Nano), it provides intelligent text enhancement capabilities directly in your browser, completely offline and privacy-focused.
+Ever wished you could have an AI writing assistant that works everywhere on the web? AnyText makes that dream a reality. It's a Chrome extension that brings intelligent text enhancement to any input field - whether you're composing emails in Gmail, posting on social media, or filling out forms.
 
-## 🚀 What Makes AnyText Special
+What makes it special? Everything runs locally using Chrome's Built-in AI (Gemini Nano), so your text never leaves your device. No internet required, no privacy concerns, just instant AI assistance wherever you're writing.
 
-### **Universal AI Integration**
-- Works on **any website** - Gmail, Twitter, LinkedIn, forms, text areas, contenteditable elements
-- **Right-click context menu** for selected text across all web pages
-- **Smart input detection** with floating AI button that appears when you focus on text fields
-- **Seamless integration** that feels native to every website
+## 🚀 Why You'll Love AnyText
 
-### **Powered by Chrome's Built-in AI**
-- Uses **Gemini Nano** running locally in your browser
-- **100% offline** - no data sent to external servers
-- **Privacy-first** - all processing happens on your device
-- **Lightning fast** responses with no network latency
+### **It Works Everywhere**
+You know how frustrating it is to switch between tabs just to check grammar or translate text? AnyText solves that. It works on Gmail, Twitter, LinkedIn, forms, text areas - basically any place you can type. Just right-click selected text or look for the subtle AI button that appears when you focus on input fields.
+
+### **Your Privacy Matters**
+Here's the cool part: everything happens right in your browser using Gemini Nano. Your text never gets sent to external servers. No internet connection needed, no data collection, no privacy worries. It's like having a personal AI assistant that never leaves your computer.
 
 ## ✨ AI Features
 
 ### 🌍 **Smart Translation**
-- Translate to 80+ languages with context awareness
-- Configurable language preferences in extension popup
-- Maintains formatting and tone in translations
+- Translate to 90+ languages including major world languages and regional dialects
+- Pick your favorite languages in the extension settings
+- Keeps the original tone and formatting intact
 
 ### 📝 **Intelligent Proofreading**
-- Grammar and spelling correction with visual diff highlighting
-- Shows exactly what was changed with green underlines
-- Preserves your writing style while fixing errors
+- Fixes grammar and spelling mistakes instantly
+- Shows you exactly what changed with green highlights
+- Keeps your writing style - just makes it cleaner
 
 ### 🎨 **Tone Adjustment**
-- **Professional** - Perfect for business emails and formal documents
-- **Casual** - Friendly and conversational tone
-- **Confident** - Assertive and direct communication
-- **Straightforward** - Clear and concise messaging
+Need to sound more professional for that important email? Or maybe make your message more friendly? AnyText can adjust your tone:
+- **Professional** - Perfect for work emails and formal stuff
+- **Casual** - Friendly and conversational 
+- **Confident** - When you need to sound assertive
+- **Straightforward** - Clear and to the point
 
 ### 🔄 **Content Rewriting**
-- Improve clarity and readability
-- Maintain original meaning while enhancing flow
-- Smart suggestions for better word choice
+Sometimes you know what you want to say, but it doesn't come out quite right. AnyText can rewrite your text to be clearer and more engaging while keeping your original meaning.
 
 ### 📄 **Text Summarization**
-- Condense long content into key points
-- Adjustable summary length
-- Perfect for research and content review
+Got a long piece of text that needs to be shorter? AnyText can condense it into the key points. Great for making long emails more digestible or summarizing research.
 
 ### ✨ **Content Generation**
-- Generate text from prompts and ideas
-- Creative writing assistance
-- Email drafting and response suggestions
+Stuck staring at a blank text box? Give AnyText a prompt and it'll help you get started. Perfect for drafting emails, writing responses, or overcoming writer's block.
 
 ## 🛠 Technical Implementation
 
@@ -70,19 +61,21 @@ AnyText is a Chrome browser extension that transforms any text input field on th
 - **Efficient Event Handling** - Smart input detection with minimal overhead
 - **Memory Management** - Clean resource cleanup and garbage collection
 
-## 🎯 User Experience
+## 🎯 How It Works
 
-### **Effortless Workflow**
-1. **Select text** anywhere on the web
-2. **Right-click** → Choose "AnyText" → Pick your AI action
-3. **See results** in beautiful preview with diff highlighting
-4. **Apply changes** with one click or copy to clipboard
+### **Two Ways to Use AnyText**
 
-### **Smart Input Integration**
-1. **Focus any text field** - AI button appears automatically
-2. **Type or paste content** - Button shows when text is detected
-3. **Click AI button** - Access all features in dropdown menu
-4. **Instant enhancement** - Apply AI improvements seamlessly
+**Method 1: Right-click anywhere**
+1. Select any text on any website
+2. Right-click and choose "AnyText" 
+3. Pick what you want to do (translate, proofread, etc.)
+4. See the results and apply them with one click
+
+**Method 2: The smart button**
+1. Click in any text field - a small AnyText button appears
+2. Type or paste your content
+3. Click the button to access all AI features
+4. Choose your action and apply the improvements
 
 ## 🔧 Installation & Setup
 
@@ -141,11 +134,29 @@ browser-extension/
 - **Settings Management** - User preferences and language config
 
 ### **Build & Deploy**
+
+Want to build the extension yourself? It's pretty straightforward:
+
 ```bash
-# No build process needed - pure JavaScript
-# Load directly in Chrome for development
-# Package as ZIP for distribution
+# Navigate to the extension directory
+cd browser-extension
+
+# Install dependencies
+npm install
+
+# Build the extension
+npm run build
 ```
+
+That's it! The built extension will be in the `./dist/` folder.
+
+#### **Loading in Chrome**
+1. Open `chrome://extensions/`
+2. Turn on "Developer mode" 
+3. Click "Load unpacked"
+4. Select the `./dist/` folder
+
+For development, you can also load the `./browser-extension/` folder directly without building.
 
 ## 🎨 Design Philosophy
 
