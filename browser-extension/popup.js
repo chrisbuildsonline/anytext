@@ -8,7 +8,6 @@ const DEFAULT_SETTINGS = {
     proofread: true,
     rewrite: true,
     summarize: true,
-    generate: true,
   },
   languages: [
     { code: "es", name: "Spanish", flag: "🇪🇸" },
@@ -24,6 +23,7 @@ const DEFAULT_SETTINGS = {
 
 const ALL_LANGUAGES = [
   // Major European Languages
+  { code: "en", name: "English", flag: "🇺🇸" },
   { code: "es", name: "Spanish", flag: "🇪🇸" },
   { code: "fr", name: "French", flag: "🇫🇷" },
   { code: "de", name: "German", flag: "🇩🇪" },
