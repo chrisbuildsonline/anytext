@@ -185,7 +185,7 @@ function setupRightClickMenu() {
 }
 
 function handleContextMenuAction(message) {
-  const { action, targetLanguage, languageName } = message;
+  const { action, targetLanguage, languageName, tone, toneName } = message;
   const selectedText = window.aiInputEnhancer?.getSelectedText();
   const selectionPosition = window.aiInputEnhancer?.getSelectionPosition();
 
@@ -202,6 +202,8 @@ function handleContextMenuAction(message) {
       languageName,
       selectionPosition
     );
+  } else if (action === "changeTone" && tone) {
+    handleRightClickToneChange(selectedText, tone, toneName, selectionPosition);
   } else {
     handleRightClickAction(action, selectedText, selectionPosition);
   }
@@ -223,6 +225,26 @@ function handleRightClickTranslate(text, languageCode, languageName, position) {
   showLoadingPreview(
     "translate",
     `Translating to ${languageName}`,
+    null,
+    position
+  );
+}
+
+function handleRightClickToneChange(text, tone, toneName, position) {
+  chrome.runtime.sendMessage({
+    type: "AI_REQUEST",
+    action: "changeTone",
+    text: text,
+    tone: tone,
+    toneName: toneName,
+    isRightClick: true,
+    position: position,
+  });
+
+  // Show loading state for right-click tone change
+  showLoadingPreview(
+    "changeTone",
+    `Changing tone to ${toneName}`,
     null,
     position
   );
@@ -302,9 +324,12 @@ function setupInputField(input) {
   input.addEventListener("blur", () => handleInputBlur(input));
   input.addEventListener("input", (e) => {
     handleInputChange(input);
-    
+
     // If this input event was caused by a paste, ensure we handle it
-    if (e.inputType === 'insertFromPaste' || e.inputType === 'insertCompositionText') {
+    if (
+      e.inputType === "insertFromPaste" ||
+      e.inputType === "insertCompositionText"
+    ) {
       // Additional check after a brief delay
       setTimeout(() => handleInputChange(input), 20);
     }
@@ -313,22 +338,22 @@ function setupInputField(input) {
     // Handle paste events with multiple strategies
     // Set pasting flag to prevent button hiding
     isPasting = true;
-    
+
     // Strategy 1: Multiple timeouts to catch different browser behaviors
     setTimeout(() => {
       handleInputChange(input);
     }, 10);
-    
+
     setTimeout(() => {
       handleInputChange(input);
     }, 50);
-    
+
     setTimeout(() => {
       handleInputChange(input);
       // Clear pasting flag after paste is complete
       isPasting = false;
     }, 100);
-    
+
     // Strategy 2: Use requestAnimationFrame for next render cycle
     requestAnimationFrame(() => {
       handleInputChange(input);
@@ -336,10 +361,10 @@ function setupInputField(input) {
   });
   input.addEventListener("keydown", (e) => {
     // Detect Ctrl+V specifically
-    if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+    if ((e.ctrlKey || e.metaKey) && e.key === "v") {
       // Set pasting flag to prevent button hiding
       isPasting = true;
-      
+
       // Handle paste with multiple strategies
       setTimeout(() => {
         handleInputChange(input);
@@ -351,16 +376,20 @@ function setupInputField(input) {
       }, 200);
     }
   });
-  
+
   input.addEventListener("keyup", () => {
     // Handle typing events to ensure button appears
     handleInputChange(input);
   });
-  
+
   // Additional events for contenteditable elements
   if (input.contentEditable === "true") {
-    input.addEventListener("DOMCharacterDataModified", () => handleInputChange(input));
-    input.addEventListener("DOMSubtreeModified", () => handleInputChange(input));
+    input.addEventListener("DOMCharacterDataModified", () =>
+      handleInputChange(input)
+    );
+    input.addEventListener("DOMSubtreeModified", () =>
+      handleInputChange(input)
+    );
   }
   input.addEventListener("selectionchange", () => handleSelectionChange(input));
 }
@@ -378,7 +407,7 @@ function handleInputBlur(input) {
   if (isPasting) {
     return;
   }
-  
+
   // Delay hiding to allow clicking the button
   setTimeout(() => {
     if (currentActiveInput === input && !isDropdownOpen() && !isPasting) {
@@ -395,7 +424,7 @@ function handleInputChange(input) {
   if (currentActiveInput === input) {
     // Check if we should show or hide the button based on text content
     const hasText = hasTextContent(input);
-    
+
     if (hasText) {
       // Show button if it's not already shown and there's text
       if (!currentButton) {
@@ -461,6 +490,7 @@ function showContextButton(input) {
     position: absolute;
     width: 24px;
     height: 24px;
+    border: none !important;
     background: none;
     border-radius: 50%;
     cursor: pointer;
@@ -966,28 +996,31 @@ function showToneSubmenu(parentItem, input) {
   currentSubmenu = submenu;
 }
 
-function insertTextAtInput(text, input, replaceAll = false) {
+function insertTextAtInput(text, input, replaceAll = false, action = null) {
+  // Strip HTML tags if this is a proofreading result
+  const plainText = action === "proofread" ? stripHtmlTags(text) : text;
+
   if (input.tagName === "INPUT" || input.tagName === "TEXTAREA") {
     const start = input.selectionStart || input.value.length;
     const end = replaceAll ? input.value.length : input.selectionEnd || start;
     const value = input.value;
 
-    input.value = value.substring(0, start) + text + value.substring(end);
-    input.selectionStart = input.selectionEnd = start + text.length;
+    input.value = value.substring(0, start) + plainText + value.substring(end);
+    input.selectionStart = input.selectionEnd = start + plainText.length;
     input.focus();
     input.dispatchEvent(new Event("input", { bubbles: true }));
   } else if (input.contentEditable === "true") {
     if (replaceAll) {
-      input.textContent = text;
+      input.textContent = plainText;
     } else {
       const selection = window.getSelection();
       if (selection.rangeCount > 0) {
         const range = selection.getRangeAt(0);
         range.deleteContents();
-        range.insertNode(document.createTextNode(text));
+        range.insertNode(document.createTextNode(plainText));
         selection.removeAllRanges();
       } else {
-        input.textContent += text;
+        input.textContent += plainText;
       }
     }
   }
@@ -1124,7 +1157,6 @@ function handleContextAction(actionId, input) {
     proofread: "Proofreading text",
     rewrite: "Rewriting text",
     summarize: "Summarizing text",
-    generate: "Generating content",
   };
   showLoadingPreview(
     actionId,
@@ -1363,7 +1395,11 @@ function showResultPreview(
       <div style="margin-bottom: 16px;">
         <div style="font-size: 12px; font-weight: 600; color: #666; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Preview</div>
         <div style="background: #f8f9fa; padding: 16px; border-radius: 8px;  line-height: 1.5; max-height: 200px; overflow-y: auto;">
-          ${action === "proofread" ? highlightProofreadingChanges(originalText, result) : escapeHtml(result)}
+          ${
+            action === "proofread"
+              ? highlightProofreadingChanges(originalText, result)
+              : escapeHtml(result)
+          }
         </div>
       </div>
       
@@ -1415,7 +1451,7 @@ function showResultPreview(
       e.stopPropagation();
       e.preventDefault();
       if (inputElement) {
-        insertTextAtInput(result, inputElement, false);
+        insertTextAtInput(result, inputElement, false, action);
         showNotification("Text inserted!", "success");
       } else {
         // Copy to clipboard as fallback
@@ -1600,7 +1636,6 @@ function showResultPreview(
 }
 
 function showLoadingInPreview(preview, loadingText) {
-
   // Find the preview content area (the div with the result text)
   // Try multiple selectors to find the content div
   let previewContentDiv =
@@ -1611,10 +1646,8 @@ function showLoadingInPreview(preview, loadingText) {
     );
 
   if (!previewContentDiv) {
-
     return;
   }
-
 
   // Store the original content if not already stored
   if (!preview.dataset.originalContent) {
@@ -1694,10 +1727,8 @@ function updatePreviewContent(preview, result) {
   }
 
   if (!previewContentDiv) {
-
     return;
   }
-
 
   // Remove spinner overlay if it exists
   const spinnerOverlay = previewContentDiv.querySelector(
@@ -1787,27 +1818,41 @@ function highlightProofreadingChanges(originalText, correctedText) {
 
     // Find corresponding word in original text
     let originalWord = "";
-    
+
     // Skip whitespace in original to find next word
-    while (originalIndex < originalWords.length && /^\s+$/.test(originalWords[originalIndex])) {
+    while (
+      originalIndex < originalWords.length &&
+      /^\s+$/.test(originalWords[originalIndex])
+    ) {
       originalIndex++;
     }
-    
+
     if (originalIndex < originalWords.length) {
       originalWord = originalWords[originalIndex];
       originalIndex++;
     }
 
     // Only highlight if there's a meaningful difference
-    const shouldHighlight = originalWord && 
-      correctedWord.trim() && 
+    const shouldHighlight =
+      originalWord &&
+      correctedWord.trim() &&
       originalWord.trim() &&
-      originalWord.toLowerCase().replace(/[^\w]/g, '') !== correctedWord.toLowerCase().replace(/[^\w]/g, '') &&
-      levenshteinDistance(originalWord.toLowerCase(), correctedWord.toLowerCase()) > 0 &&
-      levenshteinDistance(originalWord.toLowerCase(), correctedWord.toLowerCase()) <= Math.max(originalWord.length, correctedWord.length) * 0.6;
+      originalWord.toLowerCase().replace(/[^\w]/g, "") !==
+        correctedWord.toLowerCase().replace(/[^\w]/g, "") &&
+      levenshteinDistance(
+        originalWord.toLowerCase(),
+        correctedWord.toLowerCase()
+      ) > 0 &&
+      levenshteinDistance(
+        originalWord.toLowerCase(),
+        correctedWord.toLowerCase()
+      ) <=
+        Math.max(originalWord.length, correctedWord.length) * 0.6;
 
     if (shouldHighlight) {
-      result += `<span class="anytext-corrected">${escapeHtml(correctedWord)}</span>`;
+      result += `<span class="anytext-corrected">${escapeHtml(
+        correctedWord
+      )}</span>`;
     } else {
       result += escapeHtml(correctedWord);
     }
@@ -2202,50 +2247,36 @@ function insertTextAtCursor(
         const oldText = range.toString();
         range.deleteContents();
 
-        // For proofreading, insert highlighted content if in contenteditable
-        if (action === "proofread" && (originalText || oldText)) {
-          const parentElement =
-            range.commonAncestorContainer.nodeType === Node.TEXT_NODE
-              ? range.commonAncestorContainer.parentElement
-              : range.commonAncestorContainer;
-
-          if (parentElement && parentElement.contentEditable === "true") {
-            // Create highlighted content for contenteditable elements
-            const fragment = document.createDocumentFragment();
-            const tempDiv = document.createElement("div");
-            tempDiv.innerHTML = highlightProofreadingChanges(
-              originalText || oldText,
-              text
-            );
-            while (tempDiv.firstChild) {
-              fragment.appendChild(tempDiv.firstChild);
-            }
-            range.insertNode(fragment);
-          } else {
-            // For non-contenteditable, just insert plain text
-            range.insertNode(document.createTextNode(text));
-          }
-        } else {
-          range.insertNode(document.createTextNode(text));
-        }
+        // Always insert plain text, even for proofreading
+        const plainText = action === "proofread" ? stripHtmlTags(text) : text;
+        range.insertNode(document.createTextNode(plainText));
         selection.removeAllRanges();
       }
     } catch (error) {
-      // Fallback: just copy to clipboard
-      navigator.clipboard.writeText(text);
+      // Fallback: just copy to clipboard (use plain text)
+      const plainText = action === "proofread" ? stripHtmlTags(text) : text;
+      navigator.clipboard.writeText(plainText);
       showNotification(
         "Text copied to clipboard (couldn't insert directly)",
         "info"
       );
     }
   } else {
-    // Fallback: copy to clipboard
-    navigator.clipboard.writeText(text);
+    // Fallback: copy to clipboard (use plain text)
+    const plainText = action === "proofread" ? stripHtmlTags(text) : text;
+    navigator.clipboard.writeText(plainText);
     showNotification("Text copied to clipboard", "info");
   }
 }
 
 // === Helpers ===
+function stripHtmlTags(html) {
+  // Create a temporary div to parse HTML and extract text content
+  const tempDiv = document.createElement("div");
+  tempDiv.innerHTML = html;
+  return tempDiv.textContent || tempDiv.innerText || "";
+}
+
 function replaceSelectedText(
   newText,
   isFullText = false,
@@ -2327,15 +2358,10 @@ function replaceSelectedText(
   ) {
     // Handle contenteditable elements with rich text support
     if (isFullText) {
-      if (action === "proofread" && originalText) {
-        // For contenteditable, we can use actual HTML highlighting
-        currentActiveInput.innerHTML = highlightProofreadingChanges(
-          originalText,
-          newText
-        );
-      } else {
-        currentActiveInput.textContent = newText;
-      }
+      // Always insert plain text, even for proofreading
+      const plainText =
+        action === "proofread" ? stripHtmlTags(newText) : newText;
+      currentActiveInput.textContent = plainText;
     } else {
       const selection = window.getSelection();
       if (selection.rangeCount > 0) {
@@ -2343,21 +2369,10 @@ function replaceSelectedText(
         const oldText = range.toString();
         range.deleteContents();
 
-        if (action === "proofread" && (originalText || oldText)) {
-          // Create a document fragment with highlighted content
-          const fragment = document.createDocumentFragment();
-          const tempDiv = document.createElement("div");
-          tempDiv.innerHTML = highlightProofreadingChanges(
-            originalText || oldText,
-            newText
-          );
-          while (tempDiv.firstChild) {
-            fragment.appendChild(tempDiv.firstChild);
-          }
-          range.insertNode(fragment);
-        } else {
-          range.insertNode(document.createTextNode(newText));
-        }
+        // Always insert plain text, even for proofreading
+        const plainText =
+          action === "proofread" ? stripHtmlTags(newText) : newText;
+        range.insertNode(document.createTextNode(plainText));
         selection.removeAllRanges();
       }
     }
