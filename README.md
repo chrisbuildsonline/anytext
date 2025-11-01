@@ -1,64 +1,68 @@
 # AnyText - AI-Powered Text Enhancement Extension
 
-**🏆 Google Chrome AI Challenge 2025 Submission**
+<img width="100" height="1024" alt="icon-large" src="https://github.com/user-attachments/assets/14af940f-3da9-45f1-9a32-806b2a05f12e" />
 
-AnyText is a Chrome browser extension that transforms any text input field on the web into an AI-powered writing assistant. Using Chrome's Built-in AI APIs (Gemini Nano), it provides intelligent text enhancement capabilities directly in your browser, completely offline and privacy-focused.
+Ever wished you could have an AI writing assistant that works everywhere on the web? AnyText makes that dream a reality. It's a Chrome extension that brings intelligent text enhancement to any input field - whether you're composing emails in Gmail, posting on social media, or filling out forms.
 
-## 🚀 What Makes AnyText Special
+What makes it special? Everything runs locally using Chrome's Built-in API (Gemini Nano), so your text never leaves your device. No internet required, no privacy concerns, just instant AI assistance wherever you're writing.
 
-### **Universal AI Integration**
-- Works on **any website** - Gmail, Twitter, LinkedIn, forms, text areas, contenteditable elements
-- **Right-click context menu** for selected text across all web pages
-- **Smart input detection** with floating AI button that appears when you focus on text fields
-- **Seamless integration** that feels native to every website
+## 🚀 Why You'll Love AnyText
 
-### **Powered by Chrome's Built-in AI**
-- Uses **Gemini Nano** running locally in your browser
-- **100% offline** - no data sent to external servers
-- **Privacy-first** - all processing happens on your device
-- **Lightning fast** responses with no network latency
+### **It Works Everywhere**
+
+You know how frustrating it is to switch between tabs just to check grammar or translate text? AnyText solves that. It works on Gmail, Twitter, LinkedIn, forms, text areas - basically any place you can type. Just right-click selected text or look for the subtle AI button that appears when you focus on input fields.
+
+<img src="https://github.com/user-attachments/assets/831c0ad4-7035-462d-9e85-c18011718ce7" width="700">
+
+### **Your Privacy Matters**
+
+Here's the cool part: everything happens right in your browser using Gemini Nano. Your text never gets sent to external servers. No internet connection needed, no data collection, no privacy worries. It's like having a personal AI assistant that never leaves your computer.
 
 ## ✨ AI Features
 
 ### 🌍 **Smart Translation**
-- Translate to 80+ languages with context awareness
-- Configurable language preferences in extension popup
-- Maintains formatting and tone in translations
+
+- Translate to 90+ languages including major world languages and regional dialects
+- Pick your favorite languages in the extension settings
+- Keeps the original tone and formatting intact
 
 ### 📝 **Intelligent Proofreading**
-- Grammar and spelling correction with visual diff highlighting
-- Shows exactly what was changed with green underlines
-- Preserves your writing style while fixing errors
+
+- Fixes grammar and spelling mistakes instantly
+- Shows you exactly what changed with green highlights
+- Keeps your writing style - just makes it cleaner
 
 ### 🎨 **Tone Adjustment**
-- **Professional** - Perfect for business emails and formal documents
-- **Casual** - Friendly and conversational tone
-- **Confident** - Assertive and direct communication
-- **Straightforward** - Clear and concise messaging
+
+Need to sound more professional for that important email? Or maybe make your message more friendly? AnyText can adjust your tone:
+
+- **Professional** - Perfect for work emails and formal stuff
+- **Casual** - Friendly and conversational
+- **Confident** - When you need to sound assertive
+- **Straightforward** - Clear and to the point
 
 ### 🔄 **Content Rewriting**
-- Improve clarity and readability
-- Maintain original meaning while enhancing flow
-- Smart suggestions for better word choice
+
+Sometimes you know what you want to say, but it doesn't come out quite right. AnyText can rewrite your text to be clearer and more engaging while keeping your original meaning.
 
 ### 📄 **Text Summarization**
-- Condense long content into key points
-- Adjustable summary length
-- Perfect for research and content review
+
+Got a long piece of text that needs to be shorter? AnyText can condense it into the key points. Great for making long emails more digestible or summarizing research.
 
 ### ✨ **Content Generation**
-- Generate text from prompts and ideas
-- Creative writing assistance
-- Email drafting and response suggestions
+
+Stuck staring at a blank text box? Give AnyText a prompt and it'll help you get started. Perfect for drafting emails, writing responses, or overcoming writer's block.
 
 ## 🛠 Technical Implementation
 
 ### **Chrome Built-in AI APIs Used**
+
 - **LanguageModel API** - Core text processing and generation
 - **Prompt API** - Structured AI interactions
 - **Local AI Processing** - All computation happens on-device
 
 ### **Advanced Features**
+
 - **Diff Highlighting** - Visual indication of AI changes with green underlines
 - **Paste Detection** - AI button appears immediately when pasting text
 - **Loading States** - Smooth UX with spinners and progress indicators
@@ -66,60 +70,64 @@ AnyText is a Chrome browser extension that transforms any text input field on th
 - **Settings Persistence** - User preferences saved across sessions
 
 ### **Performance Optimizations**
+
 - **Early AI Initialization** - Service manager starts with extension
 - **Efficient Event Handling** - Smart input detection with minimal overhead
 - **Memory Management** - Clean resource cleanup and garbage collection
 
-## 🎯 User Experience
+## 🎯 How It Works
 
-### **Effortless Workflow**
-1. **Select text** anywhere on the web
-2. **Right-click** → Choose "AnyText" → Pick your AI action
-3. **See results** in beautiful preview with diff highlighting
-4. **Apply changes** with one click or copy to clipboard
+### **Two Ways to Use AnyText**
 
-### **Smart Input Integration**
-1. **Focus any text field** - AI button appears automatically
-2. **Type or paste content** - Button shows when text is detected
-3. **Click AI button** - Access all features in dropdown menu
-4. **Instant enhancement** - Apply AI improvements seamlessly
+**Method 1: Right-click anywhere**
 
-## 🔧 Installation & Setup
+1. Select any text on any website
+2. Right-click and choose "AnyText"
+3. Pick what you want to do (translate, proofread, etc.)
+4. See the results and apply them with one click
 
-### **Requirements**
-- **Chrome 127+** with Built-in AI APIs
-- **Gemini Nano model** downloaded (automatic in supported regions)
+**Method 2: The smart button**
 
-### **Enable Chrome AI (Required)**
-1. Go to `chrome://flags`
-2. Search for "**Prompt API for Gemini Nano**"
-3. Set to "**Enabled**"
-4. Search for "**Gemini Nano**"
-5. Set to "**Enabled**"
-6. **Restart Chrome**
+1. Click in any text field - a small AnyText button appears
+2. Type or paste your content
+3. Click the button to access all AI features
+4. Choose your action and apply the improvements
 
-### **Install Extension**
-1. Download or clone this repository
-2. Open `chrome://extensions/`
-3. Enable "**Developer mode**"
-4. Click "**Load unpacked**" → Select the `browser-extension` folder
-5. **Try the demo page** via the extension popup → About tab
+## 🔧 Getting Started
 
-## 🧪 Demo & Testing
+### **What You Need**
 
-### **Interactive Demo**
-- Click the extension icon → **About tab** → **"🚀 Try Demo Page"**
-- Test all AI features with sample content
-- See real-time AI processing and diff highlighting
+- Chrome 127 or newer
+- A few minutes to enable Chrome's AI features
 
-### **Test on Real Websites**
-- Visit Gmail, Twitter, LinkedIn, or any site with text inputs
-- Select text and right-click for context menu
-- Focus on input fields to see the AI button appear
+### **Enable Chrome AI (Important!)**
+
+Before AnyText can work, you need to turn on Chrome's built-in AI:
+
+1. Type `chrome://flags` in your address bar
+2. Search for "Prompt API for Gemini Nano" and set it to "Enabled"
+3. Search for "Gemini Nano" and set it to "Enabled"
+4. Restart Chrome
+
+### **Install AnyText**
+
+1. Download this repository
+2. Go to `chrome://extensions/`
+3. Turn on "Developer mode" (top right)
+4. Click "Load unpacked" and select the `browser-extension` folder
+
+### **Real World Testing**
+
+The best way to see AnyText in action is to use it on sites you already visit:
+
+- Compose an email in Gmail and use the AI button
+- Write a LinkedIn post and right-click to adjust the tone
+- Fill out a form and let AnyText help with the wording
 
 ## 🏗 Development
 
 ### **Project Structure**
+
 ```
 browser-extension/
 ├── manifest.json           # Extension configuration
@@ -134,6 +142,7 @@ browser-extension/
 ```
 
 ### **Key Components**
+
 - **AIServiceManager** - Handles Chrome Built-in AI initialization
 - **Input Detection** - Smart field detection with paste/type events
 - **Context Menu Integration** - Right-click AI actions
@@ -141,32 +150,55 @@ browser-extension/
 - **Settings Management** - User preferences and language config
 
 ### **Build & Deploy**
+
+Want to build the extension yourself? It's pretty straightforward:
+
 ```bash
-# No build process needed - pure JavaScript
-# Load directly in Chrome for development
-# Package as ZIP for distribution
+# Navigate to the extension directory
+cd browser-extension
+
+# Install dependencies
+npm install
+
+# Build the extension
+npm run build
 ```
+
+That's it! The built extension will be in the `./dist/` folder.
+
+#### **Loading in Chrome**
+
+1. Open `chrome://extensions/`
+2. Turn on "Developer mode"
+3. Click "Load unpacked"
+4. Select the `./dist/` folder
+
+For development, you can also load the `./browser-extension/` folder directly without building.
 
 ## 🎨 Design Philosophy
 
 ### **Invisible Until Needed**
+
 - No UI clutter - appears only when relevant
 - Contextual interactions that feel natural
 - Minimal visual footprint with maximum functionality
 
 ### **Privacy by Design**
+
 - All AI processing happens locally
 - No external API calls or data transmission
 - User data never leaves their device
 
 ### **Universal Compatibility**
+
 - Works on every website without configuration
 - Adapts to different input types and layouts
 - Consistent experience across all platforms
 
-## 🏆 Chrome AI Challenge 2025
+**🏆 Google Chrome AI Challenge 2025 Submission**
 
 ### **Innovation Highlights**
+
 - **First universal AI text assistant** that works everywhere on the web
 - **Advanced diff visualization** showing exactly what AI changed
 - **Smart paste detection** for seamless workflow integration
@@ -174,12 +206,14 @@ browser-extension/
 - **Privacy-first architecture** using only local AI processing
 
 ### **Technical Excellence**
+
 - **Efficient AI service management** with early initialization
 - **Robust error handling** and graceful degradation
 - **Performance optimized** event handling and memory usage
 - **Clean, maintainable code** with comprehensive documentation
 
 ### **User Impact**
+
 - **Transforms any website** into an AI-powered writing environment
 - **Saves time** with instant text improvements and translations
 - **Enhances communication** across languages and contexts
@@ -193,4 +227,4 @@ MIT License - See LICENSE file for details
 
 **Built with ❤️ for the Google Chrome AI Challenge 2025**
 
-*Empowering users with AI-enhanced writing capabilities, everywhere on the web.*
+_Empowering users with AI-enhanced writing capabilities, everywhere on the web._
