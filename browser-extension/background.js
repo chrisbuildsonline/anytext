@@ -55,6 +55,7 @@ class AIServiceManager {
     try {
       // Check API availability first
       if (!this.checkAPIAvailability()) {
+        this.initializationPromise = null; // Reset promise on failure
         return false;
       }
 
@@ -93,11 +94,13 @@ class AIServiceManager {
         }
 
         this.isInitialized = false;
+        this.initializationPromise = null; // Reset promise on failure
       }
 
       return this.isInitialized;
     } catch (error) {
       this.isInitialized = false;
+      this.initializationPromise = null; // Reset promise on failure
       return false;
     }
   }
@@ -172,11 +175,11 @@ class AIServiceManager {
 
   async rewrite(text, style = "improve") {
     const stylePrompts = {
-      formal: "Rewrite the following text in a formal, professional tone:",
-      casual: "Rewrite the following text in a casual, friendly tone:",
+      formal: "Rewrite the following text in a formal, professional tone. Return only the rewritten text without any markdown formatting, bullet points, or explanations:",
+      casual: "Rewrite the following text in a casual, friendly tone. Return only the rewritten text without any markdown formatting, bullet points, or explanations:",
       concise:
-        "Rewrite the following text to be more concise while preserving meaning:",
-      improve: "Improve the following text for clarity and readability:",
+        "Rewrite the following text to be more concise while preserving meaning. Return only the rewritten text without any markdown formatting, bullet points, or explanations:",
+      improve: "Improve the following text for clarity and readability. Return only the rewritten text without any markdown formatting, bullet points, or explanations:",
     };
 
     const prompt = `${stylePrompts[style] || stylePrompts.improve}\n\n${text}`;
@@ -202,9 +205,7 @@ class AIServiceManager {
     return result;
   }
 
-  async generateContent(prompt) {
-    return await this.useLanguageModel(prompt);
-  }
+
 
   /**
    * Reinitialize APIs (useful for retrying after browser updates)
@@ -249,7 +250,6 @@ async function loadSettings() {
         proofread: true,
         rewrite: true,
         summarize: true,
-        generate: true,
       },
       languages: [
         { code: "es", name: "Spanish", flag: "🇪🇸" },
@@ -325,6 +325,33 @@ async function createContextMenus() {
         parentId: "ai-input-analyzer",
         title: "Rewrite",
         contexts: ["selection"],
+      });
+    }
+
+    if (userSettings?.features?.changeTone) {
+      // Change Tone parent menu
+      chrome.contextMenus.create({
+        id: "ai-change-tone-parent",
+        parentId: "ai-input-analyzer",
+        title: "Change Tone...",
+        contexts: ["selection"],
+      });
+
+      // Add tone options
+      const toneOptions = [
+        { id: "professional", name: "Professional" },
+        { id: "casual", name: "Casual" },
+        { id: "confident", name: "Confident" },
+        { id: "straightforward", name: "Straightforward" }
+      ];
+
+      toneOptions.forEach((tone) => {
+        chrome.contextMenus.create({
+          id: `ai-change-tone-${tone.id}`,
+          parentId: "ai-change-tone-parent",
+          title: tone.name,
+          contexts: ["selection"],
+        });
       });
     }
 
@@ -418,6 +445,25 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     return;
   }
 
+  // Handle tone change actions
+  if (menuItemId.startsWith("ai-change-tone-")) {
+    const toneId = menuItemId.replace("ai-change-tone-", "");
+    const toneNames = {
+      professional: "Professional",
+      casual: "Casual", 
+      confident: "Confident",
+      straightforward: "Straightforward"
+    };
+
+    chrome.tabs.sendMessage(tab.id, {
+      type: "CONTEXT_MENU_ACTION",
+      action: "changeTone",
+      tone: toneId,
+      toneName: toneNames[toneId]
+    });
+    return;
+  }
+
   // Handle other actions
   const actionMap = {
     "ai-proofread": "proofread",
@@ -468,8 +514,6 @@ async function handleAIRequest(message, tabId) {
           return await performRewriting(text);
         case "summarize":
           return await performSummarization(text);
-        case "generate":
-          return await performGeneration(text);
         default:
           return `[PROCESSED] ${text}`;
       }
@@ -497,9 +541,6 @@ async function handleAIRequest(message, tabId) {
         break;
       case "summarize":
         result = getFallbackSummarization(text);
-        break;
-      case "generate":
-        result = getFallbackGeneration(text);
         break;
       default:
         result = `AI processing failed. ${text}`;
@@ -550,6 +591,10 @@ async function initializeAI() {
 
     return initialized;
   } catch (error) {
+    // Reset the service manager's promise on timeout/error so next call can retry
+    if (aiServiceManager) {
+      aiServiceManager.initializationPromise = null;
+    }
     return false;
   }
 }
@@ -562,11 +607,18 @@ async function performTranslation(text, targetLanguage, languageName) {
       throw new Error("AI permanently disabled - using fallback");
     }
 
-    // Initialize AI if not already done
+    // Initialize AI if not already done (with retry)
     if (!aiServiceManager || !aiServiceManager.isInitialized) {
-      const initialized = await initializeAI();
+      let initialized = await initializeAI();
+      
+      // If first attempt fails, try once more after a short delay
       if (!initialized) {
-        throw new Error("AI services not available - using fallback");
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        initialized = await initializeAI();
+        
+        if (!initialized) {
+          throw new Error("AI services not available - using fallback");
+        }
       }
     }
 
@@ -610,11 +662,18 @@ async function getFallbackTranslation(text, targetLanguage, languageName) {
 
 async function performProofreading(text) {
   try {
-    // Initialize AI if not already done
+    // Initialize AI if not already done (with retry)
     if (!aiServiceManager || !aiServiceManager.isInitialized) {
-      const initialized = await initializeAI();
+      let initialized = await initializeAI();
+      
+      // If first attempt fails, try once more after a short delay
       if (!initialized) {
-        throw new Error("AI services not available");
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        initialized = await initializeAI();
+        
+        if (!initialized) {
+          throw new Error("AI services not available");
+        }
       }
     }
 
@@ -651,11 +710,18 @@ function getFallbackProofreading(text) {
 
 async function performRewriting(text) {
   try {
-    // Initialize AI if not already done
+    // Initialize AI if not already done (with retry)
     if (!aiServiceManager || !aiServiceManager.isInitialized) {
-      const initialized = await initializeAI();
+      let initialized = await initializeAI();
+      
+      // If first attempt fails, try once more after a short delay
       if (!initialized) {
-        throw new Error("AI services not available");
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        initialized = await initializeAI();
+        
+        if (!initialized) {
+          throw new Error("AI services not available");
+        }
       }
     }
 
@@ -689,11 +755,18 @@ function getFallbackRewriting(text) {
 
 async function performSummarization(text) {
   try {
-    // Initialize AI if not already done
+    // Initialize AI if not already done (with retry)
     if (!aiServiceManager || !aiServiceManager.isInitialized) {
-      const initialized = await initializeAI();
+      let initialized = await initializeAI();
+      
+      // If first attempt fails, try once more after a short delay
       if (!initialized) {
-        throw new Error("AI services not available");
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        initialized = await initializeAI();
+        
+        if (!initialized) {
+          throw new Error("AI services not available");
+        }
       }
     }
 
@@ -727,26 +800,33 @@ function getFallbackSummarization(text) {
 
 async function performToneChange(text, tone, toneName) {
   try {
-    // Initialize AI if not already done
+    // Initialize AI if not already done (with retry)
     if (!aiServiceManager || !aiServiceManager.isInitialized) {
-      const initialized = await initializeAI();
+      let initialized = await initializeAI();
+      
+      // If first attempt fails, try once more after a short delay
       if (!initialized) {
-        throw new Error("AI services not available");
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        initialized = await initializeAI();
+        
+        if (!initialized) {
+          throw new Error("AI services not available");
+        }
       }
     }
 
     // Create a specific prompt for tone change
     const tonePrompts = {
       professional:
-        "Rewrite the following text in a professional, formal tone suitable for business communication. Return ONLY the rewritten text without any explanations or additional formatting:",
+        "Rewrite the following text in a professional, formal tone suitable for business communication. Return ONLY the rewritten text without any markdown formatting, asterisks, bullet points, bold text, or explanations:",
       casual:
-        "Rewrite the following text in a casual, friendly, conversational tone. Return ONLY the rewritten text without any explanations or additional formatting:",
+        "Rewrite the following text in a casual, friendly, conversational tone. Return ONLY the rewritten text without any markdown formatting, asterisks, bullet points, bold text, or explanations:",
       straightforward:
-        "Rewrite the following text to be direct, clear, and straightforward. Return ONLY the rewritten text without any explanations or additional formatting:",
+        "Rewrite the following text to be direct, clear, and straightforward. Return ONLY the rewritten text without any markdown formatting, asterisks, bullet points, bold text, or explanations:",
       confident:
-        "Rewrite the following text in a confident, assertive tone. Return ONLY the rewritten text without any explanations or additional formatting:",
+        "Rewrite the following text in a confident, assertive tone. Return ONLY the rewritten text without any markdown formatting, asterisks, bullet points, bold text, or explanations:",
       friendly:
-        "Rewrite the following text in a warm, friendly, and approachable tone. Return ONLY the rewritten text without any explanations or additional formatting:",
+        "Rewrite the following text in a warm, friendly, and approachable tone. Return ONLY the rewritten text without any markdown formatting, asterisks, bullet points, bold text, or explanations:",
     };
 
     const prompt = `${
@@ -781,40 +861,4 @@ function getFallbackToneChange(text, tone) {
   return text;
 }
 
-async function performGeneration(text) {
-  try {
-    // Initialize AI if not already done
-    if (!aiServiceManager || !aiServiceManager.isInitialized) {
-      const initialized = await initializeAI();
-      if (!initialized) {
-        throw new Error("AI services not available");
-      }
-    }
 
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error("Generation timeout")), 8000);
-    });
-
-    const generatePromise = aiServiceManager.generateContent(text);
-    const generatedText = await Promise.race([generatePromise, timeoutPromise]);
-    return generatedText;
-  } catch (error) {
-    // Enhanced fallback generation
-    return getFallbackGeneration(text);
-  }
-}
-
-function getFallbackGeneration(text) {
-  // Show notification about AI unavailability and return original text
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    if (tabs[0]) {
-      chrome.tabs.sendMessage(tabs[0].id, {
-        type: "SHOW_NOTIFICATION",
-        message:
-          "AI content generation unavailable. Try again.",
-        notificationType: "warning",
-      });
-    }
-  });
-  return text;
-}
